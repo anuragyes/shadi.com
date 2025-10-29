@@ -240,23 +240,29 @@ const User_individual = () => {
 
 
 
+
+
 const handleSendMessage = async () => {
   try {
-    const res = await axios.post(
-      `${BASE_URL}/api/chat/start/${userId}`,
-      {},
+    console.log(userId);
+    const res = await axios.get(
+      `${BASE_URL}/api/user/request/chat/${userId}`,
       { withCredentials: true }
     );
 
+    // console.log(  "this is the userid",userId);
+
     if (res.data.success) {
       const chatId = res.data.data._id;
-      navigate(`/chat/${userId}`); // navigate to chat room
+      console.log( "this is chatID",chatId);
+      navigate(`/chat/${userId}`);
     }
   } catch (err) {
     console.error("Error starting chat:", err);
     alert("Failed to open chat");
   }
 };
+
 
 
     // console.log("coonection status", connectionStatus);
