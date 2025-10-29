@@ -6,7 +6,7 @@ import axios from "axios";
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const API_BASE_URL = "http://localhost:5000";
+  const API_BASE_URL = "https://shadii-com.onrender.com";
 
   // ---------------- STATES ----------------
   const [currentuser, setCurrentuser] = useState(null);
