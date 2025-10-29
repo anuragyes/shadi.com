@@ -7,7 +7,7 @@ import { Users, Search, Filter, MapPin, Briefcase, GraduationCap, Mountain, Came
 import { AuthContext } from '../Context/Authcontext.js';
 
 const Discovery = () => {
-    const BASE_URL = "http://localhost:5000";
+    const BASE_URL = "https://shadii-com.onrender.com";
   const navigate = useNavigate();
   const { currentuser, isLoggedIn } = useContext(AuthContext);
 
