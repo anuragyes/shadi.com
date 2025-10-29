@@ -4,6 +4,7 @@ import { isAuth } from '../Middleware/IsAuth.js'
 import { acceptChatRequest, getConnectionStatus, getFriends, getFriendsWithConversations, getFriendsWithNoConversation, getIncomingRequests, rejectChatRequest, sendChatRequest } from '../Controllers/SendChatRequest.js'
 import { getChatMessages, getOrCreateChat, sendMessage } from "../Controllers/FriendsChat.js";
 
+
 const ChatRoutes = express.Router();
 
 // Chat request system
@@ -22,7 +23,7 @@ ChatRoutes.get("/chat/:id/messages", isAuth, getChatMessages)
 ChatRoutes.get("/status/:userId", isAuth, getConnectionStatus);
 //   get chat user with conversation withcovert not allowed 
 ChatRoutes.get("/chat-friends", isAuth, getFriendsWithConversations);
-ChatRoutes.get("/chat/-NoMessage" , isAuth , getFriendsWithNoConversation);
+ChatRoutes.get("/chat/-NoMessage", isAuth, getFriendsWithNoConversation);
 // ✅ Get all connected friends
 ChatRoutes.get("/friends", isAuth, getFriends);
 
