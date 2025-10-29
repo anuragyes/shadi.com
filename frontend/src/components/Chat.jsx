@@ -18,7 +18,7 @@ import { AuthContext } from '../Context/Authcontext.js';
 
 const Chat = () => {
 
-     const BASE_URL = "http://localhost:5000"; // use production URL
+     const BASE_URL = "https://shadii-com.onrender.com"; // use production URL
     const { friendId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
