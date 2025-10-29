@@ -33,7 +33,7 @@ import {
 import { AuthContext } from '../Context/Authcontext.js';
 
 const User_individual = () => {
-        const BASE_URL = "http://localhost:5000";
+        const BASE_URL = "https://shadii-com.onrender.com";
     const { userId } = useParams();
     const navigate = useNavigate();
     const { currentuser, isLoggedIn } = useContext(AuthContext);
