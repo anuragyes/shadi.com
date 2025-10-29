@@ -250,7 +250,7 @@ const handleSendMessage = async () => {
 
     if (res.data.success) {
       const chatId = res.data.data._id;
-      navigate(`/chat/${chatId}`); // navigate to chat room
+      navigate(`/chat/${userId}`); // navigate to chat room
     }
   } catch (err) {
     console.error("Error starting chat:", err);
