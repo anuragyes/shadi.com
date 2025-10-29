@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 const ChatList = () => {
-      const BASE_URL = "http://localhost:5000"; // use production URL
+      const BASE_URL = "https://shadii-com.onrender.com"; // use production URL
     const [friends, setFriends] = useState([]);
     const [generalFriends, setGeneralFriends] = useState([]); // Friends without conversations
     const [filteredFriends, setFilteredFriends] = useState([]);
