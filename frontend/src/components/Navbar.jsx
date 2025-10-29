@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { AuthContext } from "../Context/AuthContext.js";
+import { AuthContext }  from "../Context/Authcontext.js"
 import toast from "react-hot-toast";
 import {
   Heart,
