@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { AuthContext } from '../Context/AuthContext.js';
+import { AuthContext } from  '../Context/Authcontext.js';
 import { 
   Settings as SettingsIcon,
   User,
