@@ -20,7 +20,7 @@ import {
 import { AuthContext } from "../Context/Authcontext.js"
 
 const FriendsList = () => {
-      const BASE_URL = "http://localhost:5000";
+      const BASE_URL = "https://shadii-com.onrender.com";
   const [friends, setFriends] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
