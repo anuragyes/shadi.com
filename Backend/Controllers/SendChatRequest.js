@@ -1,6 +1,5 @@
 import { isAuth } from "../Middleware/IsAuth.js";
 import ChatRequest from "../Models/ChatstartRequest.js";
-import Message from '../models/Message.js';
 import User from '../Models/UserModel.js'
 import Chat from "../Models/ChatRoom.js";
 
