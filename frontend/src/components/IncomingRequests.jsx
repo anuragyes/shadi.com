@@ -20,7 +20,7 @@ import {
 import toast from "react-hot-toast";
 
 const IncomingRequests = () => {
-      const BASE_URL = "http://localhost:5000";
+      const BASE_URL = "https://shadii-com.onrender.com";
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
