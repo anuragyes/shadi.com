@@ -1,22 +1,19 @@
 import { isAuth } from "../Middleware/IsAuth.js";
 import ChatRequest from "../Models/ChatstartRequest.js";
-import User from '../Models/UserModel.js'
 import Chat from "../Models/ChatRoom.js";
 
 
 
 export const sendChatRequest = async (req, res) => {
   try {
-    const senderId = req.userId; // <-- fix here
+    const senderId = req.userId;
     const { receiverId } = req.body;
-
-    // console.log("Sender ID:", senderId);
-    // console.log("Receiver ID:", receiverId);
 
     if (senderId === receiverId) {
       return res.status(400).json({ success: false, message: "You can't send a request to yourself." });
     }
 
+    // Check for existing requests - ALLOW resending if rejected
     const existing = await ChatRequest.findOne({
       $or: [
         { sender: senderId, receiver: receiverId },
@@ -25,12 +22,37 @@ export const sendChatRequest = async (req, res) => {
     });
 
     if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: `Request already ${existing.status === "pending" ? "sent" : existing.status}`,
-      });
+      // If request exists and is pending, don't allow another
+      if (existing.status === "pending") {
+        return res.status(400).json({
+          success: false,
+          message: "Request already sent and pending",
+        });
+      }
+
+      // If request exists and was rejected, allow resending by updating the existing one
+      if (existing.status === "rejected") {
+        existing.status = "pending";
+        existing.createdAt = new Date();
+        await existing.save();
+
+        return res.status(200).json({
+          success: true,
+          message: "Friend request sent again.",
+          data: existing
+        });
+      }
+
+      // If request exists and was accepted, they're already connected
+      if (existing.status === "accepted") {
+        return res.status(400).json({
+          success: false,
+          message: "You are already connected with this user",
+        });
+      }
     }
 
+    // Create new request if no existing request found
     const newRequest = new ChatRequest({ sender: senderId, receiver: receiverId });
     await newRequest.save();
 
@@ -42,6 +64,8 @@ export const sendChatRequest = async (req, res) => {
 };
 
 
+
+
 export const rejectChatRequest = async (req, res) => {
   const requestId = req.params.id;
   if (!requestId) {
@@ -50,11 +74,25 @@ export const rejectChatRequest = async (req, res) => {
   const request = await ChatRequest.findById(requestId);
   if (!request) return res.status(404).json({ message: "Request not found" });
 
+  console.log("request status before", request.status);
   // console.log(request);
-  request.status = "rejected";
+  request.status = "none";
   await request.save();
+  console.log("request status after", request.status);
 
   res.status(200).json({ message: "Request rejected" });
+};
+
+
+export const cancelChatRequest = async (req, res) => {
+  const requestId = req.params.id;
+  if (!requestId) {
+    return res.status(400).json({ success: false, message: "Request ID is required" });
+  }
+  const request = await ChatRequest.findById(requestId);
+  if (!request) return res.status(404).json({ message: "Request not found" });
+  await ChatRequest.findByIdAndDelete(requestId);
+  res.status(200).json({ message: "Request cancelled" });
 };
 
 
@@ -178,246 +216,246 @@ export const getFriends = async (req, res) => {
 
 
 export const getActiveConversations = async (req, res) => {
-    try {
-        const userId = req.user._id;
-        const { page = 1, limit = 20 } = req.query;
+  try {
+    const userId = req.user._id;
+    const { page = 1, limit = 20 } = req.query;
 
-        const skip = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
-        // Find chats with messages, sorted by most recent activity
-        const chats = await ChatRequest.find({ participants: userId })
-            .populate('participants', 'personalInfo firstName lastName profilePhotos isActive lastSeen')
-            .sort({ updatedAt: -1 })
-            .skip(skip)
-            .limit(parseInt(limit));
+    // Find chats with messages, sorted by most recent activity
+    const chats = await ChatRequest.find({ participants: userId })
+      .populate('participants', 'personalInfo firstName lastName profilePhotos isActive lastSeen')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
 
-        // Filter chats that have messages and format response
-        const conversations = await Promise.all(
-            chats.map(async (chat) => {
-                const messageCount = await Message.countDocuments({ chat: chat._id });
-                
-                if (messageCount === 0) {
-                    return null;
-                }
+    // Filter chats that have messages and format response
+    const conversations = await Promise.all(
+      chats.map(async (chat) => {
+        const messageCount = await Message.countDocuments({ chat: chat._id });
 
-                const otherParticipant = chat.participants.find(
-                    participant => participant._id.toString() !== userId.toString()
-                );
+        if (messageCount === 0) {
+          return null;
+        }
 
-                if (!otherParticipant) {
-                    return null;
-                }
-
-                const lastMessage = await Message.findOne({ chat: chat._id })
-                    .sort({ timestamp: -1 })
-                    .populate('sender', 'personalInfo firstName lastName');
-
-                const unreadCount = await Message.countDocuments({
-                    chat: chat._id,
-                    sender: otherParticipant._id,
-                    readBy: { $ne: userId }
-                });
-
-                return {
-                    friendId: otherParticipant._id,
-                    chatId: chat._id,
-                    friendName: `${otherParticipant.personalInfo?.firstName} ${otherParticipant.personalInfo?.lastName}`,
-                    firstName: otherParticipant.personalInfo?.firstName,
-                    lastName: otherParticipant.personalInfo?.lastName,
-                    profilePhoto: otherParticipant.profilePhotos?.[0],
-                    isOnline: otherParticipant.isActive,
-                    lastSeen: otherParticipant.lastSeen,
-                    lastMessage: lastMessage ? {
-                        content: lastMessage.content,
-                        timestamp: lastMessage.timestamp,
-                        isFromMe: lastMessage.sender._id.toString() === userId.toString()
-                    } : null,
-                    unreadCount,
-                    updatedAt: chat.updatedAt
-                };
-            })
+        const otherParticipant = chat.participants.find(
+          participant => participant._id.toString() !== userId.toString()
         );
 
-        const filteredConversations = conversations.filter(conv => conv !== null);
-        const totalConversations = await Chat.countDocuments({ 
-            participants: userId,
-            _id: {
-                $in: await Message.distinct('chat', {})
-            }
+        if (!otherParticipant) {
+          return null;
+        }
+
+        const lastMessage = await Message.findOne({ chat: chat._id })
+          .sort({ timestamp: -1 })
+          .populate('sender', 'personalInfo firstName lastName');
+
+        const unreadCount = await Message.countDocuments({
+          chat: chat._id,
+          sender: otherParticipant._id,
+          readBy: { $ne: userId }
         });
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                conversations: filteredConversations,
-                pagination: {
-                    currentPage: parseInt(page),
-                    totalPages: Math.ceil(totalConversations / limit),
-                    totalConversations,
-                    hasNext: (page * limit) < totalConversations,
-                    hasPrev: page > 1
-                }
-            },
-            message: 'Active conversations retrieved successfully'
-        });
+        return {
+          friendId: otherParticipant._id,
+          chatId: chat._id,
+          friendName: `${otherParticipant.personalInfo?.firstName} ${otherParticipant.personalInfo?.lastName}`,
+          firstName: otherParticipant.personalInfo?.firstName,
+          lastName: otherParticipant.personalInfo?.lastName,
+          profilePhoto: otherParticipant.profilePhotos?.[0],
+          isOnline: otherParticipant.isActive,
+          lastSeen: otherParticipant.lastSeen,
+          lastMessage: lastMessage ? {
+            content: lastMessage.content,
+            timestamp: lastMessage.timestamp,
+            isFromMe: lastMessage.sender._id.toString() === userId.toString()
+          } : null,
+          unreadCount,
+          updatedAt: chat.updatedAt
+        };
+      })
+    );
 
-    } catch (error) {
-        console.error('Error getting active conversations:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
-    }
+    const filteredConversations = conversations.filter(conv => conv !== null);
+    const totalConversations = await Chat.countDocuments({
+      participants: userId,
+      _id: {
+        $in: await Message.distinct('chat', {})
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        conversations: filteredConversations,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalConversations / limit),
+          totalConversations,
+          hasNext: (page * limit) < totalConversations,
+          hasPrev: page > 1
+        }
+      },
+      message: 'Active conversations retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Error getting active conversations:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
 };
 
 
 export const getFriendsWithConversations = async (req, res) => {
-    try {
-        const userId = req.userId;
+  try {
+    const userId = req.userId;
 
-        // Find all chats where user is a participant and has messages
-        const chats = await Chat.find({ 
-            participants: userId,
-            messages: { $exists: true, $not: { $size: 0 } }
-        })
-        .populate('participants', 'personalInfo profilePhotos isActive lastSeen')
-        .sort({ lastMessageAt: -1 });
+    // Find all chats where user is a participant and has messages
+    const chats = await Chat.find({
+      participants: userId,
+      messages: { $exists: true, $not: { $size: 0 } }
+    })
+      .populate('participants', 'personalInfo profilePhotos isActive lastSeen')
+      .sort({ lastMessageAt: -1 });
 
-        // console.log("Total chats with messages found:", chats.length);
+    // console.log("Total chats with messages found:", chats.length);
 
-        // Process each chat
-        const friendsWithConversations = chats.map((chat) => {
-            // Find the other participant (friend)
-            const otherParticipant = chat.participants.find(
-                participant => participant._id.toString() !== userId.toString()
-            );
+    // Process each chat
+    const friendsWithConversations = chats.map((chat) => {
+      // Find the other participant (friend)
+      const otherParticipant = chat.participants.find(
+        participant => participant._id.toString() !== userId.toString()
+      );
 
-            if (!otherParticipant) {
-                console.log("No other participant found for chat:", chat._id);
-                return null;
-            }
+      if (!otherParticipant) {
+        console.log("No other participant found for chat:", chat._id);
+        return null;
+      }
 
-            // Get the last message from the messages array
-            const lastMessage = chat.messages && chat.messages.length > 0 
-                ? chat.messages[chat.messages.length - 1]
-                : null;
+      // Get the last message from the messages array
+      const lastMessage = chat.messages && chat.messages.length > 0
+        ? chat.messages[chat.messages.length - 1]
+        : null;
 
-            // Calculate unread count with proper null checks
-            const unreadCount = chat.messages ? chat.messages.filter(message => {
-                // Check if message exists and has required fields
-                if (!message || !message.sender) return false;
-                
-                const isFromOtherUser = message.sender.toString() !== userId.toString();
-                const isUnread = !message.readBy || !message.readBy.includes(userId);
-                
-                return isFromOtherUser && isUnread;
-            }).length : 0;
+      // Calculate unread count with proper null checks
+      const unreadCount = chat.messages ? chat.messages.filter(message => {
+        // Check if message exists and has required fields
+        if (!message || !message.sender) return false;
 
-            // Build last message object with proper null checks
-            let lastMessageObj = null;
-            if (lastMessage) {
-                lastMessageObj = {
-                    _id: lastMessage._id || chat._id,
-                    message: lastMessage.content || chat.lastMessage || "No message content",
-                    sender: lastMessage.sender,
-                    isSentByMe: lastMessage.sender && lastMessage.sender.toString() === userId.toString(),
-                    timestamp: lastMessage.timestamp || chat.lastMessageAt || chat.updatedAt,
-                    read: lastMessage.readBy ? lastMessage.readBy.includes(userId) : false
-                };
-            }
+        const isFromOtherUser = message.sender.toString() !== userId.toString();
+        const isUnread = !message.readBy || !message.readBy.includes(userId);
 
-            return {
-                _id: otherParticipant._id,
-                chatId: chat._id,
-                personalInfo: {
-                    firstName: otherParticipant.personalInfo?.firstName || 'User',
-                    lastName: otherParticipant.personalInfo?.lastName || '',
-                    fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
-                },
-                profilePhotos: otherParticipant.profilePhotos || [],
-                isActive: otherParticipant.isActive || false,
-                lastSeen: otherParticipant.lastSeen,
-                lastMessage: lastMessageObj,
-                unreadCount,
-                lastInteraction: chat.lastMessageAt || chat.updatedAt
-            };
-        });
+        return isFromOtherUser && isUnread;
+      }).length : 0;
 
-        // Remove null values
-        const filteredFriends = friendsWithConversations.filter(friend => friend !== null);
+      // Build last message object with proper null checks
+      let lastMessageObj = null;
+      if (lastMessage) {
+        lastMessageObj = {
+          _id: lastMessage._id || chat._id,
+          message: lastMessage.content || chat.lastMessage || "No message content",
+          sender: lastMessage.sender,
+          isSentByMe: lastMessage.sender && lastMessage.sender.toString() === userId.toString(),
+          timestamp: lastMessage.timestamp || chat.lastMessageAt || chat.updatedAt,
+          read: lastMessage.readBy ? lastMessage.readBy.includes(userId) : false
+        };
+      }
 
-        // console.log("Friends with conversations:", filteredFriends.length);
+      return {
+        _id: otherParticipant._id,
+        chatId: chat._id,
+        personalInfo: {
+          firstName: otherParticipant.personalInfo?.firstName || 'User',
+          lastName: otherParticipant.personalInfo?.lastName || '',
+          fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
+        },
+        profilePhotos: otherParticipant.profilePhotos || [],
+        isActive: otherParticipant.isActive || false,
+        lastSeen: otherParticipant.lastSeen,
+        lastMessage: lastMessageObj,
+        unreadCount,
+        lastInteraction: chat.lastMessageAt || chat.updatedAt
+      };
+    });
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                friends: filteredFriends,
-                totalConversations: filteredFriends.length
-            },
-            message: 'Friends with conversations retrieved successfully'
-        });
+    // Remove null values
+    const filteredFriends = friendsWithConversations.filter(friend => friend !== null);
 
-    } catch (error) {
-        console.error('Error getting friends with conversations:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
-    }
+    // console.log("Friends with conversations:", filteredFriends.length);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        friends: filteredFriends,
+        totalConversations: filteredFriends.length
+      },
+      message: 'Friends with conversations retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Error getting friends with conversations:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
 };
 
 
 
 
 export const getFriendsWithNoConversation = async (req, res) => {
-    try {
-        const userId = req.userId;
+  try {
+    const userId = req.userId;
 
-        // 1. Get all chats where current user is a participant AND messages array is empty
-        const chatsWithNoMessages = await Chat.find({
-            participants: userId,
-            $or: [
-                { messages: { $exists: false } },
-                { messages: { $size: 0 } }
-            ]
-        }).populate('participants', 'personalInfo profilePhotos isActive lastSeen');
+    // 1. Get all chats where current user is a participant AND messages array is empty
+    const chatsWithNoMessages = await Chat.find({
+      participants: userId,
+      $or: [
+        { messages: { $exists: false } },
+        { messages: { $size: 0 } }
+      ]
+    }).populate('participants', 'personalInfo profilePhotos isActive lastSeen');
 
-        // 2. Extract the friend/other participant in each chat
-        const friendsWithoutConversation = chatsWithNoMessages.map(chat => {
-            const otherParticipant = chat.participants.find(p => p._id.toString() !== userId.toString());
-            if (!otherParticipant) return null;
+    // 2. Extract the friend/other participant in each chat
+    const friendsWithoutConversation = chatsWithNoMessages.map(chat => {
+      const otherParticipant = chat.participants.find(p => p._id.toString() !== userId.toString());
+      if (!otherParticipant) return null;
 
-            return {
-                _id: otherParticipant._id,
-                chatId: chat._id,
-                personalInfo: {
-                    firstName: otherParticipant.personalInfo?.firstName || 'User',
-                    lastName: otherParticipant.personalInfo?.lastName || '',
-                    fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
-                },
-                profilePhotos: otherParticipant.profilePhotos || [],
-                isActive: otherParticipant.isActive || false,
-                lastSeen: otherParticipant.lastSeen
-            };
-        }).filter(f => f !== null); // remove nulls just in case
+      return {
+        _id: otherParticipant._id,
+        chatId: chat._id,
+        personalInfo: {
+          firstName: otherParticipant.personalInfo?.firstName || 'User',
+          lastName: otherParticipant.personalInfo?.lastName || '',
+          fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
+        },
+        profilePhotos: otherParticipant.profilePhotos || [],
+        isActive: otherParticipant.isActive || false,
+        lastSeen: otherParticipant.lastSeen
+      };
+    }).filter(f => f !== null); // remove nulls just in case
 
-        return res.status(200).json({
-            success: true,
-            data: {
-                friends: friendsWithoutConversation,
-                total: friendsWithoutConversation.length
-            },
-            message: 'Friends with no messages retrieved successfully'
-        });
+    return res.status(200).json({
+      success: true,
+      data: {
+        friends: friendsWithoutConversation,
+        total: friendsWithoutConversation.length
+      },
+      message: 'Friends with no messages retrieved successfully'
+    });
 
-    } catch (error) {
-        console.error('Error getting friends with no conversation:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Internal server error',
-            error: error.message
-        });
-    }
+  } catch (error) {
+    console.error('Error getting friends with no conversation:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
 };
