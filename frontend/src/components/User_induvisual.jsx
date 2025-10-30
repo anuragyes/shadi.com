@@ -1,7 +1,6 @@
 
 
 
-
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -33,7 +32,7 @@ import {
 import { AuthContext } from '../Context/Authcontext.js';
 
 const User_individual = () => {
-        const BASE_URL = "https://shadii-com.onrender.com";
+    const BASE_URL = "https://shadii-com.onrender.com";
     const { userId } = useParams();
     const navigate = useNavigate();
     const { currentuser, isLoggedIn } = useContext(AuthContext);
@@ -43,6 +42,8 @@ const User_individual = () => {
     const [error, setError] = useState(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [connectionStatus, setConnectionStatus] = useState("none");
+    const [requestId, setRequestId] = useState(null);
+    const [actionLoading, setActionLoading] = useState(false);
 
     const getDefaultPhoto = (gender) => {
         if (gender?.toLowerCase() === "female") return "https://placehold.co/600x600/FFB6C1/FFFFFF?text=F";
@@ -63,8 +64,6 @@ const User_individual = () => {
                     withCredentials: true,
                 });
 
-                // console.log("API Response:", res);
-
                 const userData = res.data.data?.user;
                 if (!userData) {
                     setError("User not found");
@@ -72,9 +71,7 @@ const User_individual = () => {
                     return;
                 }
 
-                // console.log("User data:", userData);
-
-                // Helper function to safely handle height object
+                // Helper functions
                 const getHeightDisplay = (height) => {
                     if (!height) return "Not specified";
                     if (typeof height === 'string') return height;
@@ -84,7 +81,6 @@ const User_individual = () => {
                     return "Not specified";
                 };
 
-                // Helper function to safely handle bio/strengths
                 const getBioDisplay = (aboutMe) => {
                     if (!aboutMe) return "No bio available";
                     if (typeof aboutMe === 'string') return aboutMe;
@@ -129,7 +125,6 @@ const User_individual = () => {
                     isCurrentUser: currentuser?._id === userData._id,
                 };
 
-                // console.log("Mapped user:", mappedUser);
                 setUser(mappedUser);
             } catch (err) {
                 console.error("Error fetching user profile:", err.message);
@@ -143,6 +138,60 @@ const User_individual = () => {
         if (userId) {
             fetchUserProfile();
         }
+    }, [userId, isLoggedIn, currentuser]);
+
+    // Fetch connection status with request ID
+    useEffect(() => {
+        const fetchConnectionStatus = async () => {
+            if (!userId || !isLoggedIn) return;
+
+            try {
+                const res = await axios.get(`${BASE_URL}/api/user/request/status/${userId}`, {
+                    withCredentials: true,
+                });
+
+                console.log("this is connection status ", res);
+
+                if (res.data.success) {
+                    setConnectionStatus(res.data.status);
+
+                    // If status is pending, we need to find the request ID for cancellation
+                    if (res.data.status === "pending") {
+                        try {
+                            // Fetch incoming requests to find the specific request
+                            const requestsRes = await axios.get(`${BASE_URL}/api/user/request/incoming`, {
+                                withCredentials: true,
+                            });
+
+                            if (requestsRes.data.success) {
+                                // Look for request where current user is sender or receiver
+                                const allRequestsRes = await axios.get(`${BASE_URL}/api/user/request/all-requests`, {
+                                    withCredentials: true,
+                                });
+
+                                if (allRequestsRes.data.success) {
+                                    const userRequest = allRequestsRes.data.data.find(
+                                        req =>
+                                            (req.sender._id === userId && req.receiver._id === currentuser?._id) ||
+                                            (req.receiver._id === userId && req.sender._id === currentuser?._id)
+                                    );
+
+                                    if (userRequest) {
+                                        setRequestId(userRequest._id);
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            console.error("Error fetching request ID:", err);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching connection status:", err);
+            }
+        };
+
+        fetchConnectionStatus();
     }, [userId, isLoggedIn, currentuser]);
 
     const calculateAge = (dateOfBirth) => {
@@ -187,85 +236,143 @@ const User_individual = () => {
         return iconMap[interest] || Sparkles;
     };
 
+
+    //   console.log("this is connection status" , connectionStatus)
+
     const handleConnect = async () => {
         try {
-
-
-
+            setActionLoading(true);
             const res = await axios.post(
                 `${BASE_URL}/api/user/request/chat-request/send`,
                 { receiverId: userId },
-                { withCredentials: true } // <--- this is important
+                { withCredentials: true }
             );
-
-            console.log(res);
 
             if (res.data.success) {
                 setConnectionStatus("pending");
+                setRequestId(res.data.data._id);
             }
         } catch (err) {
-            console.error("Error sending connection request:", err.response?.data || err.message);
-            alert("Failed to send connection request");
+            console.error("Error sending request:", err.response?.data || err.message);
+            const errorMessage = err.response?.data?.message || "Failed to send connection request";
+            alert(errorMessage);
+        } finally {
+            setActionLoading(false);
         }
     };
 
     const handleCancelRequest = async () => {
         try {
+            setActionLoading(true);
+            if (requestId) {
+                await axios.delete(
+                    `${BASE_URL}/api/user/request/cancel/${requestId}`,
+                    { withCredentials: true }
+                );
+            }
             setConnectionStatus("none");
+            setRequestId(null);
         } catch (err) {
             console.error("Error cancelling request:", err.response?.data || err.message);
+            alert("Failed to cancel request");
+        } finally {
+            setActionLoading(false);
         }
     };
 
+    const handleSendMessage = async () => {
+        try {
+            setActionLoading(true);
+            const res = await axios.get(
+                `${BASE_URL}/api/user/request/chat/${userId}`,
+                { withCredentials: true }
+            );
 
-
-    useEffect(() => {
-        const fetchConnectionStatus = async () => {
-            if (!userId || !isLoggedIn) return;
-
-            try {
-                const res = await axios.get(`${BASE_URL}/api/user/request/status/${userId}`, {
-                    withCredentials: true,
-                });
-                if (res.data.success) {
-                    setConnectionStatus(res.data.status);
-                }
-            } catch (err) {
-                console.error("Error fetching connection status:", err.response?.data || err.message);
+            if (res.data.success) {
+                const chatId = res.data.data._id;
+                navigate(`/chat/${chatId}`);
             }
-        };
+        } catch (err) {
+            console.error("Error starting chat:", err);
+            const errorMessage = err.response?.data?.message || "Failed to open chat";
+            alert(errorMessage);
+        } finally {
+            setActionLoading(false);
+        }
+    };
 
-        fetchConnectionStatus();
-    }, [userId, isLoggedIn]);
+    // Render connection status buttons
+    const renderConnectionButtons = () => {
+        if (user.isCurrentUser) {
+            return (
+                <button
+                    onClick={() => navigate("/edit-profile")}
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
+                >
+                    <Edit className="w-5 h-5" />
+                    Edit My Profile
+                </button>
+            );
+        }
 
+        return (
+            <>
+                {/* No connection or rejected - can send request */}
+                {(connectionStatus === "none" || connectionStatus === "rejected") && (
+                    <button
+                        onClick={handleConnect}
+                        disabled={actionLoading}
+                        className="w-full bg-purple-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {actionLoading ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        ) : (
+                            <Users className="w-5 h-5" />
+                        )}
+                        {connectionStatus === "rejected" ? "Send Request Again" : "Connect"}
+                    </button>
+                )}
 
+                {/* Pending request - can cancel */}
+                {connectionStatus === "pending" && (
+                    <button
+                        onClick={handleCancelRequest}
+                        disabled={actionLoading}
+                        className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 transition-all border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {actionLoading ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                        ) : (
+                            <X className="w-5 h-5" />
+                        )}
+                        Cancel Request
+                    </button>
+                )}
 
-
-
-const handleSendMessage = async () => {
-  try {
-    console.log(userId);
-    const res = await axios.get(
-      `${BASE_URL}/api/user/request/chat/${userId}`,
-      { withCredentials: true }
-    );
-
-    // console.log(  "this is the userid",userId);
-
-    if (res.data.success) {
-      const chatId = res.data.data._id;
-      console.log( "this is chatID",chatId);
-      navigate(`/chat/${userId}`);
-    }
-  } catch (err) {
-    console.error("Error starting chat:", err);
-    alert("Failed to open chat");
-  }
-};
-
-
-
-    // console.log("coonection status", connectionStatus);
+                {/* Accepted - connected, can message */}
+                {connectionStatus === "accepted" && (
+                    <>
+                        <button className="w-full bg-green-50 text-green-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 border border-green-200">
+                            <CheckCircle className="w-5 h-5" />
+                            Connected
+                        </button>
+                        <button
+                            onClick={handleSendMessage}
+                            disabled={actionLoading}
+                            className="w-full border border-purple-300 text-purple-700 py-3 rounded-xl font-semibold transition-all hover:bg-purple-50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {actionLoading ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-700"></div>
+                            ) : (
+                                <MessageCircle className="w-5 h-5" />
+                            )}
+                            Send Message
+                        </button>
+                    </>
+                )}
+            </>
+        );
+    };
 
     if (!isLoggedIn) {
         return (
@@ -455,60 +562,12 @@ const handleSendMessage = async () => {
                             </div>
 
                             <div className="space-y-3">
-                                {!user.isCurrentUser ? (
-                                    <>
-                                        {connectionStatus === "none" && (
-                                            <button
-                                                onClick={handleConnect}
-                                                className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
-                                            >
-                                                <MessageCircle className="w-5 h-5" />
-                                                Send Connection Request
-                                            </button>
-                                        )}
-
-                                        {connectionStatus === "pending" && (
-                                            <button
-                                                onClick={handleCancelRequest}
-                                                className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 transition-all border border-red-200"
-                                            >
-                                                <X className="w-5 h-5" />
-                                                Cancel Request
-                                            </button>
-                                        )}
-
-                                        {connectionStatus === "connected" && (
-                                            <button className="w-full bg-green-50 text-green-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 border border-green-200">
-                                                <CheckCircle className="w-5 h-5" />
-                                                Connected
-                                            </button>
-                                        )}
-
-                                        <button
-                                            onClick={handleSendMessage}
-                                            disabled={connectionStatus !== "accepted"}
-                                            className={`w-full border py-3 rounded-xl font-semibold transition-all ${connectionStatus === "accepted"
-                                                    ? "border-purple-300 text-purple-700 hover:bg-purple-50"
-                                                    : "border-gray-300 text-gray-400 cursor-not-allowed"
-                                                }`}
-                                        >
-                                            Send Message
-                                        </button>
-
-                                    </>
-                                ) : (
-                                    <button
-                                        onClick={() => navigate('/edit-profile')}
-                                        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all"
-                                    >
-                                        <Edit className="w-5 h-5" />
-                                        Edit My Profile
-                                    </button>
-                                )}
+                                {renderConnectionButtons()}
                             </div>
                         </div>
 
-                        {/* Personal Details */}
+                        {/* Rest of your profile sections remain the same */}
+                        {/* Personal Details, Professional Info, Lifestyle, Languages */}
                         <div className="bg-white rounded-2xl shadow-sm p-6">
                             <h3 className="text-lg font-bold text-gray-800 mb-4">Personal Details</h3>
                             <div className="space-y-3">
