@@ -1,95 +1,73 @@
 
-
-
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import {
-    MapPin,
-    Briefcase,
-    GraduationCap,
-    Heart,
-    MessageCircle,
-    ArrowLeft,
-    Share,
-    Flag,
-    Camera,
-    Music,
-    Utensils,
-    BookOpen,
-    Palette,
-    Sparkles,
-    Mountain,
-    Users,
-    Calendar,
-    Cake,
-    Zap,
-    CheckCircle,
-    X,
-    Edit
+    MapPin, Briefcase, GraduationCap, Heart, MessageCircle,
+    ArrowLeft, Share, Flag, Camera, Music, Utensils, BookOpen,
+    Palette, Sparkles, Mountain, Users, Calendar, Cake, Zap,
+    CheckCircle, X, Edit
 } from "lucide-react";
 
 import { AuthContext } from '../Context/Authcontext.js';
+import toast from 'react-hot-toast';
 
 const User_individual = () => {
     const BASE_URL = "https://shadii-com.onrender.com";
-    const { userId } = useParams();
+    const { reqId } = useParams();   // Target user ID from URL params
     const navigate = useNavigate();
     const { currentuser, isLoggedIn } = useContext(AuthContext);
 
+    console.log("🎯 Target User ID:", reqId);
+    console.log("👤 Current User ID:", currentuser?._id || currentuser?.id);
+
+    // State Management
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
+
+    // Connection States
     const [connectionStatus, setConnectionStatus] = useState("none");
     const [requestId, setRequestId] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
+    const [connectionLoading, setConnectionLoading] = useState(false);
 
+    // Default profile photo
     const getDefaultPhoto = (gender) => {
         if (gender?.toLowerCase() === "female") return "https://placehold.co/600x600/FFB6C1/FFFFFF?text=F";
         if (gender?.toLowerCase() === "male") return "https://placehold.co/600x600/87CEEB/FFFFFF?text=M";
         return "https://placehold.co/600x600/CCCCCC/FFFFFF?text=U";
     };
 
+    // 🟢 FETCH USER PROFILE
     useEffect(() => {
         const fetchUserProfile = async () => {
             if (!isLoggedIn) {
                 setLoading(false);
+                toast.error("Please login to view profiles");
+                navigate('/login');
                 return;
             }
 
             try {
                 setLoading(true);
-                const res = await axios.get(`${BASE_URL}/api/user/${userId}`, {
+                // console.log("🔍 Fetching user profile for:", reqId);
+
+                const res = await axios.get(`${BASE_URL}/api/user/${reqId}`, {
                     withCredentials: true,
                 });
 
-                const userData = res.data.data?.user;
+                // console.log("📦 Profile API response:", res.data);
+
+                const userData = res.data.data?.user || res.data.data;
                 if (!userData) {
                     setError("User not found");
                     setUser(null);
                     return;
                 }
 
-                // Helper functions
-                const getHeightDisplay = (height) => {
-                    if (!height) return "Not specified";
-                    if (typeof height === 'string') return height;
-                    if (typeof height === 'object' && height.value && height.unit) {
-                        return `${height.value} ${height.unit}`;
-                    }
-                    return "Not specified";
-                };
-
-                const getBioDisplay = (aboutMe) => {
-                    if (!aboutMe) return "No bio available";
-                    if (typeof aboutMe === 'string') return aboutMe;
-                    if (aboutMe.strengths && Array.isArray(aboutMe.strengths)) {
-                        return aboutMe.strengths.join(", ");
-                    }
-                    return "No bio available";
-                };
-
+                // Map user data to consistent format
                 const mappedUser = {
                     id: userData._id,
                     name: `${userData.personalInfo?.firstName || "Unknown"} ${userData.personalInfo?.lastName || ""}`.trim(),
@@ -98,7 +76,7 @@ const User_individual = () => {
                     location: userData.location?.city || "Earth",
                     country: userData.location?.country || "",
                     photos: userData.gallery?.length ? userData.gallery : [getDefaultPhoto(userData.personalInfo?.gender)],
-                    bio: getBioDisplay(userData.aboutMe),
+                    bio: userData.aboutMe?.strengths ? userData.aboutMe.strengths.join(", ") : "No bio available",
                     interests: [...(userData.lifestyleInfo?.hobbies || []), ...(userData.lifestyleInfo?.interests || [])].filter(Boolean),
                     occupation: userData.professionalInfo?.occupation?.replace(/_/g, " ") || "Not specified",
                     education: userData.professionalInfo?.education?.highestDegree || "Not specified",
@@ -118,82 +96,71 @@ const User_individual = () => {
                         children: userData.personalInfo?.children || "Not specified",
                         languages: userData.personalInfo?.languages?.length ? userData.personalInfo.languages : ["English"],
                     },
-                    contactInfo: {
-                        email: userData.email || "Not available",
-                        phone: userData.phone || "Not available",
-                    },
-                    isCurrentUser: currentuser?._id === userData._id,
+                    isCurrentUser: (currentuser?._id === userData._id) || (currentuser?.id === userData._id),
                 };
 
+                // console.log("✅ Mapped user data:", mappedUser);
                 setUser(mappedUser);
+                setError(null);
             } catch (err) {
-                console.error("Error fetching user profile:", err.message);
-                setError("Failed to load user profile");
+                console.error("❌ Error fetching user profile:", err.response?.data || err.message);
+                setError(err.response?.data?.message || "Failed to load user profile");
                 setUser(null);
             } finally {
                 setLoading(false);
             }
         };
 
-        if (userId) {
+        if (reqId && isLoggedIn) {
             fetchUserProfile();
         }
-    }, [userId, isLoggedIn, currentuser]);
+    }, [reqId, isLoggedIn, currentuser, navigate]);
 
-    // Fetch connection status with request ID
+    // 🟢 FETCH CONNECTION STATUS
     useEffect(() => {
         const fetchConnectionStatus = async () => {
-            if (!userId || !isLoggedIn) return;
+            if (!reqId || !isLoggedIn || (!currentuser?._id && !currentuser?.id)) {
+                console.log("🚫 Skipping connection status - missing data");
+                return;
+            }
 
             try {
-                const res = await axios.get(`${BASE_URL}/api/user/request/status/${userId}`, {
-                    withCredentials: true,
-                });
+                setConnectionLoading(true);
+                console.log("🔗 Checking connection status between:", currentuser?._id || currentuser?.id, "and", reqId);
 
-                console.log("this is connection status ", res);
+                const res = await axios.get(
+                    `${BASE_URL}/api/user/request/status`,   // very import concept   when use get and send data along withit used params
+                    {
+                        params: {
+                            receiverId: reqId,
+                            senderId: currentuser?._id || currentuser?.id
+                        },
+                        withCredentials: true
+                    }
+                );
+
+                console.log("this is res from getstatus", res)
+
+                console.log("📡 Connection status response:", res.data);
 
                 if (res.data.success) {
                     setConnectionStatus(res.data.status);
-
-                    // If status is pending, we need to find the request ID for cancellation
-                    if (res.data.status === "pending") {
-                        try {
-                            // Fetch incoming requests to find the specific request
-                            const requestsRes = await axios.get(`${BASE_URL}/api/user/request/incoming`, {
-                                withCredentials: true,
-                            });
-
-                            if (requestsRes.data.success) {
-                                // Look for request where current user is sender or receiver
-                                const allRequestsRes = await axios.get(`${BASE_URL}/api/user/request/all-requests`, {
-                                    withCredentials: true,
-                                });
-
-                                if (allRequestsRes.data.success) {
-                                    const userRequest = allRequestsRes.data.data.find(
-                                        req =>
-                                            (req.sender._id === userId && req.receiver._id === currentuser?._id) ||
-                                            (req.receiver._id === userId && req.sender._id === currentuser?._id)
-                                    );
-
-                                    if (userRequest) {
-                                        setRequestId(userRequest._id);
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Error fetching request ID:", err);
-                        }
-                    }
+                    setRequestId(res.data.requestId);
+                    console.log("✅ Connection status:", res.data.status, "Request ID:", res.data.requestId);
                 }
             } catch (err) {
-                console.error("Error fetching connection status:", err);
+                console.error("❌ Error fetching connection status:", err.response?.data || err.message);
+                setConnectionStatus("none");
+                setRequestId(null);
+            } finally {
+                setConnectionLoading(false);
             }
         };
 
         fetchConnectionStatus();
-    }, [userId, isLoggedIn, currentuser]);
+    }, [reqId, isLoggedIn, currentuser]);
 
+    // 🟢 CALCULATE AGE
     const calculateAge = (dateOfBirth) => {
         if (!dateOfBirth) return null;
         try {
@@ -210,100 +177,213 @@ const User_individual = () => {
         }
     };
 
+    // 🟢 GET HEIGHT DISPLAY
+    const getHeightDisplay = (height) => {
+        if (!height) return "Not specified";
+        if (typeof height === 'string') return height;
+        if (typeof height === 'object' && height.value && height.unit) {
+            return `${height.value} ${height.unit}`;
+        }
+        return "Not specified";
+    };
+
+    // 🟢 GET INTEREST ICON
     const getInterestIcon = (interest) => {
         const iconMap = {
-            Hiking: Mountain,
-            Photography: Camera,
-            Coffee: Utensils,
-            Travel: MapPin,
-            Technology: Briefcase,
-            Fitness: Zap,
-            Reading: BookOpen,
-            Cooking: Utensils,
-            Dancing: Music,
-            Yoga: Sparkles,
-            Beach: Mountain,
-            Music: Music,
-            Food: Utensils,
-            Writing: BookOpen,
-            Nature: Mountain,
-            Science: GraduationCap,
-            Film: Camera,
-            Art: Palette,
-            Sports: Zap,
-            Gaming: Sparkles,
+            Hiking: Mountain, Photography: Camera, Coffee: Utensils, Travel: MapPin,
+            Technology: Briefcase, Fitness: Zap, Reading: BookOpen, Cooking: Utensils,
+            Dancing: Music, Yoga: Sparkles, Beach: Mountain, Music: Music, Food: Utensils,
+            Writing: BookOpen, Nature: Mountain, Science: GraduationCap, Film: Camera,
+            Art: Palette, Sports: Zap, Gaming: Sparkles,
         };
         return iconMap[interest] || Sparkles;
     };
 
-
-    //   console.log("this is connection status" , connectionStatus)
-
+    // 🟢 HANDLE CONNECT REQUEST
     const handleConnect = async () => {
+        if (!reqId) {
+            toast.error("User ID is missing");
+            return;
+        }
+
         try {
             setActionLoading(true);
+            // console.log("📤 Sending connection request to:", reqId);
+
             const res = await axios.post(
                 `${BASE_URL}/api/user/request/chat-request/send`,
-                { receiverId: userId },
+                {
+                    senderId: currentuser?._id || currentuser?.id,
+                    receiverId: reqId
+                },
                 { withCredentials: true }
             );
 
+            console.log("✅ Connect request response:", res.data);
+
             if (res.data.success) {
+                toast.success("Connection request sent!");
                 setConnectionStatus("pending");
-                setRequestId(res.data.data._id);
+                setRequestId(res.data.data?._id);
+
+                // Refresh connection status
+                const statusRes = await axios.get(
+                    `${BASE_URL}/api/user/request/status`,   // very import concept   when use get and send data along withit used params
+                    {
+                        params: {
+                            receiverId: reqId,
+                            senderId: currentuser?._id || currentuser?.id
+                        },
+                        withCredentials: true
+                    }
+                );
+                if (statusRes.data.success) {
+                    setConnectionStatus(statusRes.data.status);
+                }
             }
         } catch (err) {
-            console.error("Error sending request:", err.response?.data || err.message);
+            console.error("❌ Error sending request:", err.response?.data || err.message);
             const errorMessage = err.response?.data?.message || "Failed to send connection request";
-            alert(errorMessage);
+            toast.error(errorMessage);
         } finally {
             setActionLoading(false);
         }
     };
 
+    // 🟢 HANDLE CANCEL REQUEST
     const handleCancelRequest = async () => {
         try {
             setActionLoading(true);
-            if (requestId) {
-                await axios.delete(
-                    `${BASE_URL}/api/user/request/cancel/${requestId}`,
-                    { withCredentials: true }
-                );
-            }
-            setConnectionStatus("none");
-            setRequestId(null);
-        } catch (err) {
-            console.error("Error cancelling request:", err.response?.data || err.message);
-            alert("Failed to cancel request");
-        } finally {
-            setActionLoading(false);
-        }
-    };
+            // console.log("🗑️ Cancelling request between:", currentuser?._id || currentuser?.id, "and", reqId);
 
-    const handleSendMessage = async () => {
-        try {
-            setActionLoading(true);
-            const res = await axios.get(
-                `${BASE_URL}/api/user/request/chat/${userId}`,
+            const response = await axios.put(
+                `${BASE_URL}/api/user/request/cancel-by-user`,
+                {
+                    senderId: currentuser?._id || currentuser?.id,
+                    receiverId: reqId
+                },
                 { withCredentials: true }
             );
 
-            if (res.data.success) {
-                const chatId = res.data.data._id;
-                navigate(`/chat/${chatId}`);
+            // console.log("✅ Cancel response:", response.data);
+
+            if (response.data.success) {
+                toast.success("Request cancelled successfully");
+                setConnectionStatus("none");
+                setRequestId(null);
             }
         } catch (err) {
-            console.error("Error starting chat:", err);
-            const errorMessage = err.response?.data?.message || "Failed to open chat";
-            alert(errorMessage);
+            console.error("❌ Error cancelling request:", err.response?.data || err.message);
+            const errorMessage = err.response?.data?.message || "Failed to cancel request";
+            toast.error(errorMessage);
         } finally {
             setActionLoading(false);
         }
     };
 
-    // Render connection status buttons
+    // 🟢 HANDLE ACCEPT REQUEST
+    const handleAcceptRequest = async () => {
+        if (!requestId) {
+            toast.error("Request ID is missing");
+            return;
+        }
+
+        try {
+            setActionLoading(true);
+            // console.log("✅ Accepting request:", requestId);
+
+            const res = await axios.put(
+                `${BASE_URL}/api/user/request/accept`,
+                {
+                    senderId: reqId, // The person who sent the request
+                    receiverId: currentuser?._id || currentuser?.id // Current user accepting
+                },
+                { withCredentials: true }
+            );
+
+            // console.log("✅ Accept response:", res.data);
+
+            if (res.data.success) {
+                toast.success("Request accepted!");
+                setConnectionStatus("accepted");
+            }
+        } catch (err) {
+            console.error("❌ Error accepting request:", err.response?.data || err.message);
+            toast.error(err.response?.data?.message || "Failed to accept request");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // 🟢 HANDLE REJECT REQUEST
+    const handleRejectRequest = async () => {
+        if (!requestId) {
+            toast.error("Request ID is missing");
+            return;
+        }
+
+        try {
+            setActionLoading(true);
+            // console.log("❌ Rejecting request:", requestId);
+
+            const res = await axios.put(
+                `${BASE_URL}/api/user/request/cancel-request`,
+                {
+                    senderId: reqId, // The person who sent the request
+                    receiverId: currentuser?._id || currentuser?.id // Current user rejecting
+                },
+                { withCredentials: true }
+            );
+
+            // console.log("✅ Reject response:", res.data);
+
+            if (res.data.success) {
+                toast.success("Request rejected");
+                setConnectionStatus("rejected");
+            }
+        } catch (err) {
+            console.error("❌ Error rejecting request:", err.response?.data || err.message);
+            toast.error(err.response?.data?.message || "Failed to reject request");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // 🟢 HANDLE SEND MESSAGE
+    const handleSendMessage = async () => {
+        if (!reqId) {
+            toast.error("User ID is missing");
+            return;
+        }
+
+        try {
+            setActionLoading(true);
+            // console.log("💬 Opening chat with:", reqId);
+
+            // First check if we're connected
+            if (connectionStatus !== "accepted") {
+                toast.error("You need to be connected to message this user");
+                return;
+            }
+
+            // Navigate to chat page - you'll need to implement this route
+            navigate(`/chat/${reqId}`);
+            toast.success("Opening chat...");
+
+        } catch (err) {
+            console.error("❌ Error starting chat:", err.response?.data || err.message);
+            toast.error(err.response?.data?.message || "Failed to open chat");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    // 🟢 RENDER CONNECTION BUTTONS
     const renderConnectionButtons = () => {
-        if (user.isCurrentUser) {
+        // console.log("🎨 Rendering buttons - Status:", connectionStatus, "Request ID:", requestId, "Is Current User:", user?.isCurrentUser);
+
+        // Own profile - show edit button
+        if (user?.isCurrentUser) {
             return (
                 <button
                     onClick={() => navigate("/edit-profile")}
@@ -315,43 +395,90 @@ const User_individual = () => {
             );
         }
 
-        return (
-            <>
-                {/* No connection or rejected - can send request */}
-                {(connectionStatus === "none" || connectionStatus === "rejected") && (
+        // Loading state
+        if (connectionLoading) {
+            return (
+                <button
+                    disabled
+                    className="w-full bg-gray-200 text-gray-500 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all"
+                >
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-500"></div>
+                    Checking connection...
+                </button>
+            );
+        }
+
+        // Connection status based rendering
+        switch (connectionStatus) {
+            case "none":
+                return (
                     <button
                         onClick={handleConnect}
                         disabled={actionLoading}
-                        className="w-full bg-purple-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-purple-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-600 transition-all disabled:opacity-50"
                     >
                         {actionLoading ? (
                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                         ) : (
                             <Users className="w-5 h-5" />
                         )}
-                        {connectionStatus === "rejected" ? "Send Request Again" : "Connect"}
+                        {actionLoading ? "Sending..." : "Connect"}
                     </button>
-                )}
+                );
 
-                {/* Pending request - can cancel */}
-                {connectionStatus === "pending" && (
-                    <button
-                        onClick={handleCancelRequest}
-                        disabled={actionLoading}
-                        className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 transition-all border border-red-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {actionLoading ? (
-                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
-                        ) : (
-                            <X className="w-5 h-5" />
-                        )}
-                        Cancel Request
-                    </button>
-                )}
+            case "pending":
+                // Determine if pending request is from me or to me
+                const isPendingFromMe = requestId && connectionStatus === "pending";
 
-                {/* Accepted - connected, can message */}
-                {connectionStatus === "accepted" && (
-                    <>
+                if (isPendingFromMe) {
+                    return (
+                        <button
+                            onClick={handleCancelRequest}
+                            disabled={actionLoading}
+                            className="w-full bg-red-50 text-red-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-100 transition-all border border-red-200 disabled:opacity-50"
+                        >
+                            {actionLoading ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600"></div>
+                            ) : (
+                                <X className="w-5 h-5" />
+                            )}
+                            {actionLoading ? "Cancelling..." : "Cancel Request"}
+                        </button>
+                    );
+                } else {
+                    return (
+                        <div className="space-y-3">
+                            <button
+                                onClick={handleAcceptRequest}
+                                disabled={actionLoading}
+                                className="w-full bg-green-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition-all disabled:opacity-50"
+                            >
+                                {actionLoading ? (
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                ) : (
+                                    <CheckCircle className="w-5 h-5" />
+                                )}
+                                {actionLoading ? "Accepting..." : "Accept Request"}
+                            </button>
+                            <button
+                                onClick={handleRejectRequest}
+                                disabled={actionLoading}
+                                className="w-full bg-red-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-red-600 transition-all disabled:opacity-50"
+                            >
+                                {actionLoading ? (
+                                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                ) : (
+                                    <X className="w-5 h-5" />
+                                )}
+                                {actionLoading ? "Rejecting..." : "Reject Request"}
+                            </button>
+                        </div>
+                    );
+                }
+
+            case "accepted":
+                return (
+                    <div className="space-y-3">
                         <button className="w-full bg-green-50 text-green-600 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 border border-green-200">
                             <CheckCircle className="w-5 h-5" />
                             Connected
@@ -359,39 +486,49 @@ const User_individual = () => {
                         <button
                             onClick={handleSendMessage}
                             disabled={actionLoading}
-                            className="w-full border border-purple-300 text-purple-700 py-3 rounded-xl font-semibold transition-all hover:bg-purple-50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full border border-purple-300 text-purple-700 py-3 rounded-xl font-semibold transition-all hover:bg-purple-50 flex items-center justify-center gap-2 disabled:opacity-50"
                         >
                             {actionLoading ? (
                                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-purple-700"></div>
                             ) : (
                                 <MessageCircle className="w-5 h-5" />
                             )}
-                            Send Message
+                            {actionLoading ? "Opening..." : "Send Message"}
                         </button>
-                    </>
-                )}
-            </>
-        );
+                    </div>
+                );
+
+            case "rejected":
+                return (
+                    <button
+                        onClick={handleConnect}
+                        disabled={actionLoading}
+                        className="w-full bg-purple-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-600 transition-all disabled:opacity-50"
+                    >
+                        {actionLoading ? (
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        ) : (
+                            <Users className="w-5 h-5" />
+                        )}
+                        {actionLoading ? "Sending..." : "Send Request Again"}
+                    </button>
+                );
+
+            default:
+                return (
+                    <button
+                        onClick={handleConnect}
+                        disabled={actionLoading || connectionLoading}
+                        className="w-full bg-purple-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-purple-600 transition-all disabled:opacity-50"
+                    >
+                        <Users className="w-5 h-5" />
+                        Connect
+                    </button>
+                );
+        }
     };
 
-    if (!isLoggedIn) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
-                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Required</h2>
-                    <p className="text-gray-600 mb-6">Please login to view user profiles</p>
-                    <button
-                        onClick={() => navigate('/login')}
-                        className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg transition-all"
-                    >
-                        Sign In
-                    </button>
-                </div>
-            </div>
-        );
-    }
-
+    // Loading State
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
@@ -403,6 +540,7 @@ const User_individual = () => {
         );
     }
 
+    // Error State
     if (error || !user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
@@ -472,11 +610,12 @@ const User_individual = () => {
                 </div>
             </div>
 
+            {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 py-8">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Photos & Basic Info */}
+                    {/* Left Column - Photos & Info */}
                     <div className="lg:col-span-2 space-y-6">
-                        {/* Main Photo Gallery */}
+                        {/* Photo Gallery */}
                         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                             <div className="relative">
                                 <img
@@ -488,7 +627,6 @@ const User_individual = () => {
                                     }}
                                 />
 
-                                {/* Image Gallery */}
                                 {user.photos.length > 1 && (
                                     <div className="absolute bottom-4 left-4 right-4">
                                         <div className="flex gap-2 overflow-x-auto pb-2">
@@ -566,8 +704,7 @@ const User_individual = () => {
                             </div>
                         </div>
 
-                        {/* Rest of your profile sections remain the same */}
-                        {/* Personal Details, Professional Info, Lifestyle, Languages */}
+                        {/* Personal Details */}
                         <div className="bg-white rounded-2xl shadow-sm p-6">
                             <h3 className="text-lg font-bold text-gray-800 mb-4">Personal Details</h3>
                             <div className="space-y-3">
@@ -614,48 +751,6 @@ const User_individual = () => {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Lifestyle */}
-                        <div className="bg-white rounded-2xl shadow-sm p-6">
-                            <h3 className="text-lg font-bold text-gray-800 mb-4">Lifestyle</h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Smoking</span>
-                                    <span className="font-medium capitalize">{user.lifestyle.smoking}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Drinking</span>
-                                    <span className="font-medium capitalize">{user.lifestyle.drinking}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-gray-600">Exercise</span>
-                                    <span className="font-medium capitalize">{user.lifestyle.exercise}</span>
-                                </div>
-                                {user.lifestyle.diet !== "Not specified" && (
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-gray-600">Diet</span>
-                                        <span className="font-medium capitalize">{user.lifestyle.diet}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Languages */}
-                        {user.personalInfo.languages.length > 0 && (
-                            <div className="bg-white rounded-2xl shadow-sm p-6">
-                                <h3 className="text-lg font-bold text-gray-800 mb-4">Languages</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {user.personalInfo.languages.map((language, index) => (
-                                        <span
-                                            key={index}
-                                            className="bg-blue-50 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium border border-blue-100"
-                                        >
-                                            {language}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
