@@ -1,22 +1,17 @@
-
-
 import { useEffect, useState, useContext } from "react";
 import axios from "axios";
 import {
   Users,
   Clock,
-  CheckCircle,
-  XCircle,
   MessageCircle,
-  MoreHorizontal,
-  User,
   Mail,
   Calendar,
   Search,
-  Filter,
   Check,
+  User,
   X,
-  MapPin
+  MapPin,
+  Loader
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { AuthContext } from '../Context/Authcontext.js';
@@ -26,26 +21,25 @@ const IncomingRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [actionLoading, setActionLoading] = useState(null);
 
   const { currentuser } = useContext(AuthContext);
-
-  console.log("Current user:", currentuser?.id || currentuser?._id);
 
   useEffect(() => {
     const fetchRequests = async () => {
       try {
         const userId = currentuser?.id || currentuser?._id;
-        
+
         if (!userId) {
           console.error("No user ID found");
           setLoading(false);
           return;
         }
 
-        console.log("Fetching requests for user:", userId);
-        
+        console.log("🔄 Fetching requests for user:", userId);
+
         const res = await axios.get(
-          `${BASE_URL}/api/user/request/incoming/${userId}`, 
+          `${BASE_URL}/api/user/request/incoming/${userId}`,
           {
             withCredentials: true,
             headers: {
@@ -54,27 +48,25 @@ const IncomingRequests = () => {
           }
         );
 
-        console.log("API Response:", res);
-        console.log("Response data:", res.data);
+        console.log("📦 API Response:", res.data);
 
         if (res.data && res.data.success) {
-          setRequests(res.data.data || []);
+          setRequests(res.data.requests || []);
+          console.log("✅ Requests set:", res.data.requests);
         } else {
-          console.error("API returned success: false", res.data?.message);
           toast.error(res.data?.message || "Failed to load requests");
           setRequests([]);
         }
       } catch (err) {
-        console.error("Error fetching requests:", err);
+        console.error("❌ Error fetching requests:", err);
         if (err.response) {
-          console.error("Response error:", err.response.data);
-          console.error("Status code:", err.response.status);
+          console.error("📊 Response error:", err.response.data);
           toast.error(err.response.data?.message || "Failed to load requests");
         } else if (err.request) {
-          console.error("No response received:", err.request);
+          console.error("🌐 No response received");
           toast.error("No response from server");
         } else {
-          console.error("Request setup error:", err.message);
+          console.error("⚡ Request setup error:", err.message);
           toast.error("Request failed");
         }
         setRequests([]);
@@ -90,48 +82,55 @@ const IncomingRequests = () => {
     }
   }, [currentuser]);
 
-  const handleAccept = async (requestId) => {
+  const handleAccept = async (requestId, senderId) => {
+    setActionLoading(requestId);
     try {
-      console.log("Accepting request:", requestId);
-      
-      const res = await axios.post(
-        `${BASE_URL}/api/user/request/${requestId}/accept`,
-        {},
-        { 
+      console.log("✅ Accepting request:", requestId, "from sender:", senderId);
+
+      const res = await axios.put(
+        `${BASE_URL}/api/user/request/accept`,
+        {
+          receiverId: currentuser?.id || currentuser?._id,
+          senderId: senderId
+        },
+        {
           withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          }
         }
       );
 
-      console.log("Accept response:", res.data);
+      console.log("📨 Accept response:", res);
 
       if (res.data && res.data.success) {
-        toast.success("Request accepted!");
-        setRequests(prev => prev.filter(req => req._id !== requestId));
+        toast.success("Request accepted successfully!");
+        setRequests(prev => prev.filter(req => req.requestId !== requestId));
       } else {
         toast.error(res.data?.message || "Failed to accept request");
       }
     } catch (err) {
-      console.error("Error accepting request:", err);
+      console.error("❌ Error accepting request:", err);
       if (err.response) {
-        console.error("Response error:", err.response.data);
+        console.error("📊 Response error:", err.response.data);
         toast.error(err.response.data?.message || "Failed to accept request");
       } else {
-        toast.error("Network error");
+        toast.error("Network error while accepting request");
       }
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const handleReject = async (requestId) => {
+  const handleReject = async (requestId, senderId) => {
+    setActionLoading(requestId);
     try {
-      console.log("Rejecting request:", requestId);
-      
-      const res = await axios.post(
-        `${BASE_URL}/api/user/request/${requestId}/reject`,
-        {},
-        { 
+      console.log("❌ Rejecting request:", requestId, "from sender:", senderId);
+
+      const res = await axios.put(
+        `${BASE_URL}/api/user/request/cancel-by-user`,
+        {
+          receiverId: currentuser?.id || currentuser?._id,
+          senderId: senderId
+        },
+        {
           withCredentials: true,
           headers: {
             'Content-Type': 'application/json',
@@ -139,43 +138,69 @@ const IncomingRequests = () => {
         }
       );
 
-      console.log("Reject response:", res.data);
+      console.log("📨 Reject response:", res.data);
 
       if (res.data && res.data.success) {
-        toast.success("Request rejected!");
-        setRequests(prev => prev.filter(req => req._id !== requestId));
+        toast.success("Request rejected successfully!");
+        setRequests(prev => prev.filter(req => req.requestId !== requestId));
       } else {
         toast.error(res.data?.message || "Failed to reject request");
       }
     } catch (err) {
-      console.error("Error rejecting request:", err);
+      console.error("❌ Error rejecting request:", err);
       if (err.response) {
-        console.error("Response error:", err.response.data);
+        console.error("📊 Response error:", err.response.data);
         toast.error(err.response.data?.message || "Failed to reject request");
       } else {
-        toast.error("Network error");
+        toast.error("Network error while rejecting request");
       }
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const getInitials = (firstName, lastName) => {
-    return `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`.toUpperCase();
+  const getInitials = (personalInfo) => {
+    if (!personalInfo) return "U";
+    const firstName = personalInfo.firstName || '';
+    const lastName = personalInfo.lastName || '';
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase() || "U";
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return "Recently";
+
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now - date);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Filter requests based on sender name or email
   const filteredRequests = requests.filter(req => {
-    const firstName = req.sender?.personalInfo?.firstName?.toLowerCase() || '';
-    const lastName = req.sender?.personalInfo?.lastName?.toLowerCase() || '';
-    const email = req.sender?.email?.toLowerCase() || '';
-    const query = searchTerm.toLowerCase();
+    if (!searchTerm) return true;
     
-    return firstName.includes(query) || 
-           lastName.includes(query) || 
-           email.includes(query);
+    const searchableText = [
+      req.sender?.personalInfo?.firstName || '',
+      req.sender?.personalInfo?.lastName || '',
+      req.sender?.email || '',
+      req.sender?._id || ''
+    ].join(' ').toLowerCase();
+
+    return searchableText.includes(searchTerm.toLowerCase());
   });
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h3 className="text-lg font-medium text-gray-900">Loading requests</h3>
@@ -188,56 +213,33 @@ const IncomingRequests = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Users className="w-4 h-4 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900">Connection Requests</h1>
-                  <p className="text-gray-500 text-sm">
-                    {requests.length} request{requests.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-6 space-y-4 sm:space-y-0">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+                <Users className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Connection Requests</h1>
+                <p className="text-gray-500 text-sm mt-1">
+                  {requests.length} incoming request{requests.length !== 1 ? 's' : ''}
+                </p>
               </div>
             </div>
 
-            {/* Search Bar - Desktop */}
-            <div className="hidden md:block flex-1 max-w-md mx-8">
+            {/* Search Bar */}
+            <div className="flex-1 max-w-md">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
-                  placeholder="Search requests..."
+                  placeholder="Search by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 />
               </div>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <button className="hidden sm:flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                <Filter className="w-4 h-4" />
-                <span>Filter</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Search Bar - Mobile */}
-          <div className="md:hidden pb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search requests..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
             </div>
           </div>
         </div>
@@ -245,136 +247,134 @@ const IncomingRequests = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-            <div className="text-2xl font-bold text-gray-900">{requests.length}</div>
-            <div className="text-gray-500 text-sm">Total Requests</div>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-gray-900">{requests.length}</div>
+            <div className="text-gray-500 text-sm mt-1">Total Requests</div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-            <div className="text-2xl font-bold text-amber-600">{requests.length}</div>
-            <div className="text-gray-500 text-sm">Pending</div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-amber-600">{requests.length}</div>
+            <div className="text-gray-500 text-sm mt-1">Pending</div>
           </div>
-          <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-            <div className="text-2xl font-bold text-gray-400">0</div>
-            <div className="text-gray-500 text-sm">Accepted</div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-gray-400">0</div>
+            <div className="text-gray-500 text-sm mt-1">Accepted</div>
           </div>
         </div>
 
         {/* Requests List */}
         {filteredRequests.length === 0 ? (
-          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-            <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {requests.length === 0 ? "No connection requests" : "No matching requests"}
+          <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-12 text-center shadow-sm">
+            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              {searchTerm ? "No matching requests" : "No connection requests"}
             </h3>
-            <p className="text-gray-500">
-              {requests.length === 0
-                ? "When someone sends you a connection request, it will appear here."
-                : "Try adjusting your search terms."
+            <p className="text-gray-500 max-w-sm mx-auto">
+              {searchTerm
+                ? "Try adjusting your search terms to find what you're looking for."
+                : "When someone sends you a connection request, it will appear here."
               }
             </p>
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredRequests.map((req) => (
-              <div key={req._id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            {filteredRequests.map((request) => (
+              <div
+                key={request.requestId}
+                className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
+              >
                 <div className="p-6">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
                     {/* User Info */}
-                    <div className="flex items-start space-x-4 flex-1">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        {getInitials(req.sender?.personalInfo?.firstName, req.sender?.personalInfo?.lastName)}
+                    <div className="flex items-start space-x-4 flex-1 min-w-0">
+                      {/* Avatar */}
+                      <div className="flex-shrink-0">
+                        <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-md">
+                          {getInitials(request.sender?.personalInfo)}
+                        </div>
                       </div>
 
+                      {/* User Details */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h3 className="text-lg font-semibold text-gray-900 truncate">
-                            {req.sender?.personalInfo?.firstName || 'Unknown'} {req.sender?.personalInfo?.lastName || 'User'}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {request.sender?.personalInfo?.firstName && request.sender?.personalInfo?.lastName 
+                              ? `${request.sender.personalInfo.firstName} ${request.sender.personalInfo.lastName}`
+                              : 'Unknown User'
+                            }
                           </h3>
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200 mt-1 sm:mt-0">
                             <Clock className="w-3 h-3 mr-1" />
                             Pending
                           </span>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 text-gray-500 text-sm mb-3">
-                          <div className="flex items-center space-x-1 mb-1 sm:mb-0">
-                            <Mail className="w-4 h-4" />
-                            <span className="truncate">{req.sender?.email || 'No email'}</span>
+                        {/* Contact Info */}
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 text-gray-600 text-sm mb-3 space-y-1 sm:space-y-0">
+                          <div className="flex items-center space-x-2">
+                            <Mail className="w-4 h-4 text-gray-400" />
+                            <span>{request.sender?.email || 'No email'}</span>
                           </div>
-                          {req.sender?.location?.city && (
-                            <div className="flex items-center space-x-1">
-                              <MapPin className="w-4 h-4" />
-                              <span>{req.sender.location.city}</span>
-                            </div>
-                          )}
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="w-4 h-4 text-gray-400" />
+                            <span>User ID: {request.sender?._id?.slice(-8) || 'N/A'}</span>
+                          </div>
                         </div>
 
-                        {/* Interests */}
-                        {req.sender?.lifestyleInfo?.interests?.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-4">
-                            {req.sender.lifestyleInfo.interests.slice(0, 4).map((interest, index) => (
-                              <span
-                                key={index}
-                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
-                              >
-                                {interest}
-                              </span>
-                            ))}
-                            {req.sender.lifestyleInfo.interests.length > 4 && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-                                +{req.sender.lifestyleInfo.interests.length - 4}
-                              </span>
-                            )}
-                          </div>
-                        )}
-
                         {/* Request Message */}
-                        {req.message && (
-                          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <div className="flex items-start space-x-2">
+                        {request.message && (
+                          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="flex items-start space-x-3">
                               <MessageCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                              <p className="text-blue-800 text-sm leading-relaxed">"{req.message}"</p>
+                              <p className="text-blue-800 text-sm leading-relaxed">"{request.message}"</p>
                             </div>
                           </div>
                         )}
+
+                        {/* Timestamp - Mobile */}
+                        <div className="flex items-center mt-4 lg:hidden text-sm text-gray-500">
+                          <Calendar className="w-4 h-4 mr-2" />
+                          {formatDate(request.createdAt)}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
-                      <button
-                        onClick={() => handleAccept(req._id)}
-                        className="inline-flex items-center justify-center space-x-2 px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                      >
-                        <Check className="w-4 h-4" />
-                        <span>Accept</span>
-                      </button>
-                      <button
-                        onClick={() => handleReject(req._id)}
-                        className="inline-flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        <X className="w-4 h-4" />
-                        <span>Decline</span>
-                      </button>
-                    </div>
-                  </div>
+                    {/* Actions & Timestamp */}
+                    <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4 lg:space-x-0 lg:space-y-4">
+                      {/* Timestamp - Desktop */}
+                      <div className="hidden lg:flex items-center text-sm text-gray-500 whitespace-nowrap">
+                        <Calendar className="w-4 h-4 mr-2" />
+                        {formatDate(request.createdAt)}
+                      </div>
 
-                  {/* Timestamp */}
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100">
-                    <div className="text-sm text-gray-500">
-                      Received {new Date(req.createdAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {new Date(req.createdAt).toLocaleTimeString('en-US', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
+                      {/* Action Buttons */}
+                      <div className="flex flex-col sm:flex-row lg:flex-col space-y-2 sm:space-y-0 sm:space-x-2 lg:space-x-0 lg:space-y-2">
+                        <button
+                          onClick={() => handleAccept(request.requestId, request.sender?._id)}
+                          disabled={actionLoading === request.requestId}
+                          className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm"
+                        >
+                          {actionLoading === request.requestId ? (
+                            <Loader className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Check className="w-4 h-4" />
+                          )}
+                          <span>Accept</span>
+                        </button>
+                        <button
+                          onClick={() => handleReject(request.requestId, request.sender?._id)}
+                          disabled={actionLoading === request.requestId}
+                          className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 shadow-sm"
+                        >
+                          {actionLoading === request.requestId ? (
+                            <Loader className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <X className="w-4 h-4" />
+                          )}
+                          <span>Decline</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
