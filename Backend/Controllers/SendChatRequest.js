@@ -1,17 +1,146 @@
-
-
 import { isAuth } from "../Middleware/IsAuth.js";
 import ChatRequest from "../Models/ChatstartRequest.js";
 import Chat from "../Models/ChatRoom.js";
+import mongoose from "mongoose";
 
+
+
+
+// 🟢 GET INCOMING REQUESTS (requests sent *to* the logged-in user)
+
+
+// export const getIncomingRequestcount = async (req, res) => {
+//   try {
+//     const userId = req.params.id; // from URL
+//     if (!userId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "User ID is required"
+//       });
+//     }
+
+//     console.log("📥 Counting incoming requests for user:", userId);
+
+//     // Count all pending requests where the user is the receiver
+//     const count = await ChatRequest.countDocuments({
+//       receiver: userId,
+//       status: "pending"
+//     });
+
+//     console.log("📊 Incoming pending requests count:", count);
+
+//     res.status(200).json({
+//       success: true,
+//       count: count
+//     });
+
+//   } catch (error) {
+//     console.error("❌ Error getting incoming request count:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
+
+
+
+
+
+export const getIncomingRequestcount = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format",
+      });
+    }
+
+    console.log("📥 Counting incoming requests for user:", userId);
+
+    const count = await ChatRequest.countDocuments({
+      receiver: userId,
+      status: "pending",
+    });
+
+    console.log("📊 Incoming pending requests count:", count);
+
+    res.status(200).json({
+      success: true,
+      userId,
+      count,
+    });
+
+  } catch (error) {
+    console.error("❌ Error getting incoming request count:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+
+export const getConnectionStatus = async (req, res) => {
+  try {
+
+
+    const { receiverId, senderId } = req.query;     // very impo when hit get request with dtaa sent i body tak it as
+
+    console.log(senderId);
+    console.log(receiverId);
+    console.log("Current User ID:", senderId, "Target User ID:", receiverId);
+
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ success: false, message: "Both user IDs are required" });
+    }
+
+    // Find any request between the two users
+    const request = await ChatRequest.findOne({
+      $or: [
+        { sender: senderId, receiver: receiverId },
+        { sender: receiverId, receiver: senderId },
+      ],
+    });
+
+    // If no request exists, default to "none"
+    if (!request) {
+      return res.json({ success: true, status: "none", requestId: null });
+    }
+
+    // Return the actual status stored in DB
+    return res.json({
+      success: true,
+      status: request.status, // this will be "pending", "accepted", "rejected", or "none"
+      requestId: request._id,
+    });
+
+  } catch (error) {
+    console.error("Error checking connection:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// 🟢 SEND CHAT REQUEST (Case 1 & 2 Logic)
 export const sendChatRequest = async (req, res) => {
   try {
-    const senderId = req.userId;
+    const { senderId } = req.body;
     const { receiverId } = req.body;
 
-    console.log("Sender ID:", senderId);
-    console.log("Receiver ID:", receiverId);
+    console.log("this is sender", senderId);
+    console.log("this sis reciverID", receiverId);
 
+    // Validate: Can't send request to yourself
     if (senderId === receiverId) {
       return res.status(400).json({
         success: false,
@@ -19,16 +148,18 @@ export const sendChatRequest = async (req, res) => {
       });
     }
 
-    // 🔍 Check if any chat request already exists between these two users
-    const existing = await ChatRequest.findOne({
+    // Check for existing request between these users
+    const existingRequest = await ChatRequest.findOne({
       $or: [
         { sender: senderId, receiver: receiverId },
         { sender: receiverId, receiver: senderId },
       ],
     });
 
-    // ✅ CASE 1: If no request exists, create a new one
-    if (!existing) {
+    console.log("📊 Existing request found:", existingRequest);
+
+    // CASE 1: No existing request - create new one
+    if (!existingRequest) {
       const newRequest = new ChatRequest({
         sender: senderId,
         receiver: receiverId,
@@ -36,64 +167,64 @@ export const sendChatRequest = async (req, res) => {
       });
 
       await newRequest.save();
+      console.log("✅ New request created:", newRequest._id);
 
       return res.status(201).json({
         success: true,
-        message: "Friend request sent.",
+        message: "Connection request sent successfully",
         data: newRequest,
       });
     }
 
-    // ✅ CASE 2: If request already exists
-    console.log("Existing request status:", existing.status);
+    // CASE 2: Handle existing requests based on status
+    const isCurrentUserSender = existingRequest.sender.toString() === senderId;
 
-    // If pending and sent by the *other user*
-    if (existing.status === "pending" && existing.sender.toString() === receiverId) {
-      return res.status(400).json({
-        success: false,
-        message: "This user has already sent you a request. Please accept or reject it.",
-      });
+    switch (existingRequest.status) {
+      case "pending":
+        if (isCurrentUserSender) {
+          return res.status(400).json({
+            success: false,
+            message: "You already sent a request to this user.",
+          });
+        } else {
+          return res.status(400).json({
+            success: false,
+            message: "This user already sent you a request. Please check your incoming requests.",
+          });
+        }
+
+      case "accepted":
+        return res.status(400).json({
+          success: false,
+          message: "You are already connected with this user.",
+        });
+
+      case "rejected":
+      case "none":
+        // If rejected or none, update to pending and change sender to current user
+        existingRequest.status = "pending";
+        existingRequest.sender = senderId;
+        existingRequest.receiver = receiverId;
+        existingRequest.createdAt = new Date();
+        await existingRequest.save();
+
+        console.log("🔄 Request reset to pending:", existingRequest._id);
+
+        return res.status(200).json({
+          success: true,
+          message: "Connection request sent successfully",
+          data: existingRequest,
+        });
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: "Unexpected request state.",
+        });
     }
-
-    // If pending and sent by current user
-    if (existing.status === "pending" && existing.sender.toString() === senderId) {
-      return res.status(400).json({
-        success: false,
-        message: "You already have a pending request with this user.",
-      });
-    }
-
-    // If rejected previously, allow resending
-    if (existing.status === "rejected") {
-      existing.status = "pending";
-      existing.sender = senderId;
-      existing.receiver = receiverId;
-      existing.createdAt = new Date();
-      await existing.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "Friend request sent again.",
-        data: existing,
-      });
-    }
-
-    // If already accepted
-    if (existing.status === "accepted") {
-      return res.status(400).json({
-        success: false,
-        message: "You are already connected with this user.",
-      });
-    }
-
-    // Default fallback
-    return res.status(400).json({
-      success: false,
-      message: "Unexpected request state.",
-    });
 
   } catch (err) {
-    console.error("Send Chat Request Error:", err);
+    console.error("❌ Send Request Error:", err);
     res.status(500).json({
       success: false,
       message: "Internal server error.",
@@ -101,568 +232,436 @@ export const sendChatRequest = async (req, res) => {
   }
 };
 
-export const rejectChatRequest = async (req, res) => {
+// 🟢 CANCEL REQUEST BY USER ID (Universal cancel - sets status to "none")  someone cancel the request
+export const cancelChatRequestByUser = async (req, res) => {
   try {
-    const requestId = req.params.id;
-    const userId = req.userId;
+    const { senderId, receiverId } = req.body;
 
-    if (!requestId) {
-      return res.status(400).json({ success: false, message: "Request ID is required" });
-    }
+    console.log("🗑️ Cancelling request between:", senderId, "and", receiverId);
 
-    // Find the request and verify the current user is the receiver
-    const request = await ChatRequest.findOne({
-      _id: requestId,
-      receiver: userId,
-      status: "pending"
-    });
-
-    if (!request) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Request not found or you don't have permission to reject it" 
+    // 🧩 Validation
+    if (!senderId || !receiverId) {
+      return res.status(400).json({
+        success: false,
+        message: "Both senderId and receiverId are required",
       });
     }
 
-    // Update status to rejected
-    request.status = "rejected";
+    // 🔍 Find any request between these users (regardless of who sent it)
+    const request = await ChatRequest.findOne({
+      $or: [
+        { sender: senderId, receiver: receiverId },
+        { sender: receiverId, receiver: senderId }
+      ]
+    });
+
+    console.log("📋 Found request to cancel:", request);
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No request found between these users",
+      });
+    }
+
+    // ✅ Set status to "none" instead of deleting
+    request.status = "none";
+    request.updatedAt = new Date();
     await request.save();
 
-    res.status(200).json({ 
-      success: true, 
-      message: "Request rejected successfully" 
+    console.log("✅ Request status set to 'none':", request._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Request cancelled successfully. Status set to 'none'.",
+      data: request
     });
+
   } catch (error) {
-    console.error("Error rejecting request:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ Cancel Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
+
+// 🟢 CANCEL SPECIFIC REQUEST (by request ID)  as a user cancel request
 export const cancelChatRequest = async (req, res) => {
   try {
-    const requestId = req.params.id;
-    const userId = req.userId;
+    const { receiverId, senderId } = req.body;
 
-    if (!requestId) {
-      return res.status(400).json({ success: false, message: "Request ID is required" });
-    }
-
-    // Find the request and verify the current user is the sender
-    const request = await ChatRequest.findOne({
-      _id: requestId,
-      sender: userId,
-      status: "pending"
-    });
-
-    if (!request) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Request not found or you don't have permission to cancel it" 
+    if (!receiverId || !senderId) {
+      return res.status(400).json({
+        success: false,
+        message: "receiverId and senderId are required",
       });
     }
 
-    await ChatRequest.findByIdAndDelete(requestId);
-    
-    res.status(200).json({ 
-      success: true, 
-      message: "Request cancelled successfully" 
+    console.log("🗑️ Cancel Request | Sender:", senderId, "Receiver:", receiverId);
+
+    // Find the pending chat request between these two users
+    const request = await ChatRequest.findOne({
+      $or: [
+        { sender: senderId, receiver: receiverId },
+        { sender: receiverId, receiver: senderId }
+      ],
+      status: "pending",
     });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending request found between these users",
+      });
+    }
+
+    // ✅ Update the request status instead of deleting
+    request.status = "none";
+    await request.save();
+
+    console.log("✅ Request status updated to 'none'");
+
+    return res.status(200).json({
+      success: true,
+      message: "Request cancelled successfully and status set to none",
+      data: request,
+    });
+
   } catch (error) {
-    console.error("Error cancelling request:", error);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("❌ Cancel Chat Request Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while cancelling request",
+    });
   }
 };
 
+
+// GET CONNECTION STATUS - return the actual status from DB
+
+
+// 🟢 ACCEPT CHAT REQUEST (when receiver accepts the pending request)
 export const acceptChatRequest = async (req, res) => {
   try {
-    const requestId = req.params.id;
-    const userId = req.userId;
+    const { receiverId, senderId } = req.body;
 
-    if (!requestId) {
-      return res.status(400).json({ success: false, message: "Request ID is required" });
-    }
+    console.log("✅ Accepting request between:", senderId, "→", receiverId);
 
-    // Find the request and make sure the current user is the receiver
-    const request = await ChatRequest.findOne({ 
-      _id: requestId, 
-      receiver: userId,
-      status: "pending"
-    });
-
-    if (!request) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Request not found or you don't have permission to accept it" 
+    if (!senderId || !receiverId) {
+      return res.status(400).json({
+        success: false,
+        message: "Both senderId and receiverId are required",
       });
     }
 
-    // Update the request status to accepted
+    // 🔍 Find the pending request between the users
+    const request = await ChatRequest.findOne({
+      sender: senderId,
+      receiver: receiverId,
+      status: "pending",
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending request found between these users",
+      });
+    }
+
+    // ✅ Update request status to accepted
     request.status = "accepted";
+    request.updatedAt = new Date();
     await request.save();
 
-    // Create a chat room for the connected users
+    console.log("🎯 Request accepted successfully:", request._id);
+
+    // 💬 Check or create chat room
     try {
       const existingChat = await Chat.findOne({
-        participants: { $all: [request.sender, request.receiver] }
+        participants: { $all: [senderId, receiverId] },
       });
 
       if (!existingChat) {
         const newChat = new Chat({
-          participants: [request.sender, request.receiver],
-          lastMessageAt: new Date()
+          participants: [senderId, receiverId],
+          lastMessageAt: new Date(),
         });
         await newChat.save();
+        console.log("💬 New chat room created:", newChat._id);
+      } else {
+        console.log("💬 Chat room already exists:", existingChat._id);
       }
     } catch (chatError) {
-      console.error("Error creating chat room:", chatError);
-      // Don't fail the request if chat creation fails
+      console.error("⚠️ Chat creation error:", chatError);
     }
 
-    return res.status(200).json({ 
-      success: true, 
-      message: "Request accepted", 
-      data: request 
-    });
-  } catch (error) {
-    console.error("Error accepting request:", error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
-
-export const cancelChatRequestByUser = async (req, res) => {
-  try {
-    const currentUserId = req.userId;
-    const otherUserId = req.params.userId;
-
-    if (!otherUserId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
-    }
-
-    // Find the pending request where current user is involved
-    const request = await ChatRequest.findOne({
-      $or: [
-        { sender: currentUserId, receiver: otherUserId, status: "pending" },
-        { sender: otherUserId, receiver: currentUserId, status: "pending" }
-      ]
-    });
-
-    if (!request) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "No pending request found" 
-      });
-    }
-
-    // Delete the request
-    await ChatRequest.findByIdAndDelete(request._id);
-    
-    res.status(200).json({ 
-      success: true, 
-      message: "Request cancelled successfully" 
-    });
-  } catch (error) {
-    console.error("Error cancelling request by user:", error);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-// GET /api/user/request/status/:userId
-// GET /api/user/request/status/:userId - FIXED VERSION
-export const getConnectionStatus = async (req, res) => {
-  try {
-    const currentUserId = req.userId;
-    const targetUserId = req.params.userId;
-
-    console.log("🟣 Checking connection status:", { 
-      currentUserId, 
-      targetUserId 
-    });
-
-    // Find any existing request between these two users
-    const existingRequest = await ChatRequest.findOne({
-      $or: [
-        { sender: currentUserId, receiver: targetUserId },
-        { sender: targetUserId, receiver: currentUserId },
-      ],
-    });
-
-    if (!existingRequest) {
-      console.log("🟣 No existing request found - status: none");
-      return res.json({ 
-        success: true, 
-        status: "none",
-        requestId: null 
-      });
-    }
-
-    console.log("🟣 Found existing request:", {
-      requestId: existingRequest._id,
-      sender: existingRequest.sender.toString(),
-      receiver: existingRequest.receiver.toString(),
-      status: existingRequest.status,
-      currentUserIsSender: existingRequest.sender.toString() === currentUserId
-    });
-
-    let connectionStatus;
-    let requestId = null;
-
-    // If current user is the SENDER of the request
-    if (existingRequest.sender.toString() === currentUserId) {
-      switch (existingRequest.status) {
-        case "pending":
-          connectionStatus = "pending";
-          requestId = existingRequest._id;
-          break;
-        case "accepted":
-          connectionStatus = "accepted";
-          requestId = existingRequest._id;
-          break;
-        case "rejected":
-          connectionStatus = "rejected";
-          break;
-        default:
-          connectionStatus = "none";
-      }
-    } 
-    // If current user is the RECEIVER of the request
-    else {
-      switch (existingRequest.status) {
-        case "pending":
-          // If someone sent request to current user, show "none" so they can send their own
-          connectionStatus = "none";
-          break;
-        case "accepted":
-          connectionStatus = "accepted";
-          requestId = existingRequest._id;
-          break;
-        case "rejected":
-          connectionStatus = "rejected";
-          break;
-        default:
-          connectionStatus = "none";
-      }
-    }
-
-    console.log("🟣 Returning connection status:", { 
-      connectionStatus, 
-      requestId,
-      currentUserRole: existingRequest.sender.toString() === currentUserId ? "sender" : "receiver"
-    });
-    
-    return res.json({
+    // ✅ Response
+    return res.status(200).json({
       success: true,
-      status: connectionStatus,
-      requestId: requestId,
+      message: "Request accepted successfully",
+      status: "accepted",
+      data: request,
     });
-  } catch (err) {
-    console.error("❌ Error fetching connection status:", err);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
 
-// Keep your other functions (getIncomingRequests, getFriends, etc.) the same
-export const getIncomingRequests = async (req, res) => {
-  try {
-    const requests = await ChatRequest.find({
-      receiver: req.userId,
-      status: "pending",
-    }).populate("sender", "personalInfo firstName lastName email gallery location");
-
-    res.status(200).json({ success: true, data: requests });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: "Failed to fetch requests" });
+    console.error("❌ Accept Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
 
 
 
-export const getFriends = async (req, res) => {
+
+
+// 🟢 GET OUTGOING REQUESTS (Your sent requests)
+export const getOutgoingRequests = async (req, res) => {
   try {
     const userId = req.userId;
 
-    // 🧩 Find all accepted requests where user is either sender or receiver
+    console.log("📤 Fetching outgoing requests for user:", userId);
+
+    const requests = await ChatRequest.find({
+      sender: userId,
+      status: "pending",
+    }).populate("receiver", "personalInfo firstName lastName email gallery location");
+
+    console.log("📤 Outgoing requests found:", requests.length);
+
+    res.status(200).json({
+      success: true,
+      data: requests,
+      count: requests.length
+    });
+
+  } catch (error) {
+    console.error("❌ Get Outgoing Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch outgoing requests"
+    });
+  }
+};
+
+// ... (Keep your existing getFriends, getActiveConversations, etc. functions as they are)
+
+export const getFriends = async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID missing from request (make sure authentication is working)",
+      });
+    }
+
+    console.log("📡 Fetching accepted friends for user:", userId);
+
+    // 🧩 Find all accepted connections involving this user
     const requests = await ChatRequest.find({
       $or: [{ sender: userId }, { receiver: userId }],
       status: "accepted",
     })
-      .populate("sender", "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt")
-      .populate("receiver", "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt");
+      .populate(
+        "sender",
+        "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt"
+      )
+      .populate(
+        "receiver",
+        "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt"
+      );
 
-    // 🧠 Extract the other user (friend)
-    const friends = requests.map((req) => {
-      const isSender = req.sender._id.toString() === userId.toString();
-      const friend = isSender ? req.receiver : req.sender;
+    console.log(`✅ Found ${requests.length} accepted connections.`);
+
+    // 🧠 Extract "friends" — i.e., the other user in each accepted request
+    const friends = requests.map((reqDoc) => {
+      const isSender = reqDoc.sender._id.toString() === userId.toString();
+      const friend = isSender ? reqDoc.receiver : reqDoc.sender;
+
+      if (!friend) return null; // safety check
 
       return {
         _id: friend._id,
         firstName: friend.personalInfo?.firstName || "",
         lastName: friend.personalInfo?.lastName || "",
-        email: friend.email,
-        gallery: friend.gallery,
-        location: friend.location,
-        isActive: friend.isActive,
-        lastActive: friend.lastActive,
-        createdAt: req.createdAt, // friendship date
+        email: friend.email || "",
+        gallery: friend.gallery?.length ? friend.gallery[0] : null,
+        location: friend.location || {},
+        isActive: friend.isActive || false,
+        lastActive: friend.lastActive || "Recently active",
+        connectedAt: reqDoc.updatedAt, // friendship acceptance time
       };
-    });
+    }).filter(Boolean); // remove nulls
 
     res.status(200).json({
       success: true,
-      data: friends,
+      count: friends.length,
+      friends,
     });
   } catch (error) {
-    console.error("Error fetching friends:", error);
+    console.error("❌ Error fetching friends:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch connected users",
+      message: "Failed to fetch friends list",
     });
   }
 };
 
 
-export const getActiveConversations = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { page = 1, limit = 20 } = req.query;
-
-    const skip = (page - 1) * limit;
-
-    // Find chats with messages, sorted by most recent activity
-    const chats = await ChatRequest.find({ participants: userId })
-      .populate('participants', 'personalInfo firstName lastName profilePhotos isActive lastSeen')
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    // Filter chats that have messages and format response
-    const conversations = await Promise.all(
-      chats.map(async (chat) => {
-        const messageCount = await Message.countDocuments({ chat: chat._id });
-
-        if (messageCount === 0) {
-          return null;
-        }
-
-        const otherParticipant = chat.participants.find(
-          participant => participant._id.toString() !== userId.toString()
-        );
-
-        if (!otherParticipant) {
-          return null;
-        }
-
-        const lastMessage = await Message.findOne({ chat: chat._id })
-          .sort({ timestamp: -1 })
-          .populate('sender', 'personalInfo firstName lastName');
-
-        const unreadCount = await Message.countDocuments({
-          chat: chat._id,
-          sender: otherParticipant._id,
-          readBy: { $ne: userId }
-        });
-
-        return {
-          friendId: otherParticipant._id,
-          chatId: chat._id,
-          friendName: `${otherParticipant.personalInfo?.firstName} ${otherParticipant.personalInfo?.lastName}`,
-          firstName: otherParticipant.personalInfo?.firstName,
-          lastName: otherParticipant.personalInfo?.lastName,
-          profilePhoto: otherParticipant.profilePhotos?.[0],
-          isOnline: otherParticipant.isActive,
-          lastSeen: otherParticipant.lastSeen,
-          lastMessage: lastMessage ? {
-            content: lastMessage.content,
-            timestamp: lastMessage.timestamp,
-            isFromMe: lastMessage.sender._id.toString() === userId.toString()
-          } : null,
-          unreadCount,
-          updatedAt: chat.updatedAt
-        };
-      })
-    );
-
-    const filteredConversations = conversations.filter(conv => conv !== null);
-    const totalConversations = await Chat.countDocuments({
-      participants: userId,
-      _id: {
-        $in: await Message.distinct('chat', {})
-      }
-    });
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        conversations: filteredConversations,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalConversations / limit),
-          totalConversations,
-          hasNext: (page * limit) < totalConversations,
-          hasPrev: page > 1
-        }
-      },
-      message: 'Active conversations retrieved successfully'
-    });
-
-  } catch (error) {
-    console.error('Error getting active conversations:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
-  }
-};
 
 
 export const getFriendsWithConversations = async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.params.id;
 
-    // Find all chats where user is a participant and has messages
-    const chats = await Chat.find({
-      participants: userId,
-      messages: { $exists: true, $not: { $size: 0 } }
+    console.log("📡 Fetching accepted friends with conversations for user:", userId);
+
+    // 1️⃣ Find all accepted friend requests
+    const requests = await ChatRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+      status: "accepted",
     })
-      .populate('participants', 'personalInfo profilePhotos isActive lastSeen')
-      .sort({ lastMessageAt: -1 });
+      .populate("sender", "personalInfo firstName lastName email profilePhotos isActive lastSeen")
+      .populate("receiver", "personalInfo firstName lastName email profilePhotos isActive lastSeen");
 
-    // console.log("Total chats with messages found:", chats.length);
+    if (!requests.length) {
+      return res.status(200).json({ success: true, data: [], message: "No accepted friends found" });
+    }
 
-    // Process each chat
-    const friendsWithConversations = chats.map((chat) => {
-      // Find the other participant (friend)
-      const otherParticipant = chat.participants.find(
-        participant => participant._id.toString() !== userId.toString()
-      );
-
-      if (!otherParticipant) {
-        console.log("No other participant found for chat:", chat._id);
-        return null;
-      }
-
-      // Get the last message from the messages array
-      const lastMessage = chat.messages && chat.messages.length > 0
-        ? chat.messages[chat.messages.length - 1]
-        : null;
-
-      // Calculate unread count with proper null checks
-      const unreadCount = chat.messages ? chat.messages.filter(message => {
-        // Check if message exists and has required fields
-        if (!message || !message.sender) return false;
-
-        const isFromOtherUser = message.sender.toString() !== userId.toString();
-        const isUnread = !message.readBy || !message.readBy.includes(userId);
-
-        return isFromOtherUser && isUnread;
-      }).length : 0;
-
-      // Build last message object with proper null checks
-      let lastMessageObj = null;
-      if (lastMessage) {
-        lastMessageObj = {
-          _id: lastMessage._id || chat._id,
-          message: lastMessage.content || chat.lastMessage || "No message content",
-          sender: lastMessage.sender,
-          isSentByMe: lastMessage.sender && lastMessage.sender.toString() === userId.toString(),
-          timestamp: lastMessage.timestamp || chat.lastMessageAt || chat.updatedAt,
-          read: lastMessage.readBy ? lastMessage.readBy.includes(userId) : false
-        };
-      }
-
-      return {
-        _id: otherParticipant._id,
-        chatId: chat._id,
-        personalInfo: {
-          firstName: otherParticipant.personalInfo?.firstName || 'User',
-          lastName: otherParticipant.personalInfo?.lastName || '',
-          fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
-        },
-        profilePhotos: otherParticipant.profilePhotos || [],
-        isActive: otherParticipant.isActive || false,
-        lastSeen: otherParticipant.lastSeen,
-        lastMessage: lastMessageObj,
-        unreadCount,
-        lastInteraction: chat.lastMessageAt || chat.updatedAt
-      };
+    // 2️⃣ Extract friends
+    const friends = requests.map(reqItem => {
+      const isSender = reqItem.sender._id.toString() === userId.toString();
+      return isSender ? reqItem.receiver : reqItem.sender;
     });
 
-    // Remove null values
-    const filteredFriends = friendsWithConversations.filter(friend => friend !== null);
+    // 3️⃣ Check if these friends have an active chat with the user
+    const friendsWithConversations = await Promise.all(
+      friends.map(async (friend) => {
+        // Find chat where both participants are involved
+        const chat = await Chat.findOne({
+          participants: { $all: [userId, friend._id] }
+        });
 
-    // console.log("Friends with conversations:", filteredFriends.length);
+        if (!chat) return null; // No chat exists
 
-    return res.status(200).json({
+        // Get message count from the messages array in the chat document
+        const messageCount = chat.messages ? chat.messages.length : 0;
+        
+        console.log("message count", messageCount);
+        
+        if (messageCount === 0) return null; // Chat exists but no messages
+
+        // Get last message from the messages array
+        const lastMessage = chat.messages && chat.messages.length > 0 
+          ? chat.messages[chat.messages.length - 1] 
+          : null;
+
+        // Count unread messages (messages where readBy doesn't include userId)
+        const unreadCount = chat.messages ? chat.messages.filter(message => 
+          message.sender && 
+          message.sender.toString() === friend._id.toString() && 
+          (!message.readBy || !message.readBy.includes(userId))
+        ).length : 0;
+
+        return {
+          friendId: friend._id,
+          name: `${friend.personalInfo?.firstName} ${friend.personalInfo?.lastName}`,
+          profilePhoto: friend.profilePhotos?.[0] || null,
+          isOnline: friend.isActive,
+          lastSeen: friend.lastSeen,
+          chatId: chat._id,
+          conversationCount: messageCount,
+          lastMessage: lastMessage?.content || null,
+          lastMessageAt: lastMessage?.timestamp || chat.lastMessageAt,
+          unreadCount,
+        };
+      })
+    );
+
+    const filteredFriends = friendsWithConversations.filter(f => f !== null);
+
+    res.status(200).json({
       success: true,
-      data: {
-        friends: filteredFriends,
-        totalConversations: filteredFriends.length
-      },
-      message: 'Friends with conversations retrieved successfully'
+      data: filteredFriends
     });
 
   } catch (error) {
-    console.error('Error getting friends with conversations:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    console.error("❌ Error fetching friends with conversations:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-
 
 
 
 export const getFriendsWithNoConversation = async (req, res) => {
   try {
-    const userId = req.userId;
+    const userId = req.params.id;
 
-    // 1. Get all chats where current user is a participant AND messages array is empty
-    const chatsWithNoMessages = await Chat.find({
-      participants: userId,
-      $or: [
-        { messages: { $exists: false } },
-        { messages: { $size: 0 } }
-      ]
-    }).populate('participants', 'personalInfo profilePhotos isActive lastSeen');
+    console.log("📡 Fetching accepted friends for user:", userId);
 
-    // 2. Extract the friend/other participant in each chat
-    const friendsWithoutConversation = chatsWithNoMessages.map(chat => {
-      const otherParticipant = chat.participants.find(p => p._id.toString() !== userId.toString());
-      if (!otherParticipant) return null;
+    // 1️⃣ Find all accepted friend requests
+    const requests = await ChatRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+      status: "accepted",
+    })
+      .populate("sender", "personalInfo firstName lastName email profilePhotos isActive lastSeen")
+      .populate("receiver", "personalInfo firstName lastName email profilePhotos isActive lastSeen");
 
-      return {
-        _id: otherParticipant._id,
-        chatId: chat._id,
-        personalInfo: {
-          firstName: otherParticipant.personalInfo?.firstName || 'User',
-          lastName: otherParticipant.personalInfo?.lastName || '',
-          fullName: `${otherParticipant.personalInfo?.firstName || 'User'} ${otherParticipant.personalInfo?.lastName || ''}`.trim()
-        },
-        profilePhotos: otherParticipant.profilePhotos || [],
-        isActive: otherParticipant.isActive || false,
-        lastSeen: otherParticipant.lastSeen
-      };
-    }).filter(f => f !== null); // remove nulls just in case
+    if (!requests.length) {
+      return res.status(200).json({ success: true, data: [], message: "No accepted friends found" });
+    }
 
-    return res.status(200).json({
+    // 2️⃣ Extract friends
+    const friends = requests.map(reqItem => {
+      const isSender = reqItem.sender._id.toString() === userId.toString();
+      return isSender ? reqItem.receiver : reqItem.sender;
+    });
+
+    // 3️⃣ For each friend, check if there is an active conversation
+    const friendsWithConversations = await Promise.all(
+      friends.map(async (friend) => {
+        const chat = await Chat.findOne({
+          participants: { $all: [userId, friend._id] }
+        });
+
+        let lastMessage = null;
+        let unreadCount = 0;
+
+        if (chat) {
+          lastMessage = await Chat.findOne({ chat: chat._id }).sort({ timestamp: -1 });
+          unreadCount = await Chat.countDocuments({
+            chat: chat._id,
+            sender: friend._id,
+            readBy: { $ne: userId }
+          });
+        }
+
+        return {
+          friendId: friend._id,
+          name: `${friend.personalInfo?.firstName} ${friend.personalInfo?.lastName}`,
+          profilePhoto: friend.profilePhotos?.[0] || null,
+          isOnline: friend.isActive,
+          lastSeen: friend.lastSeen,
+          chatId: chat?._id || null,
+          lastMessage: lastMessage ? lastMessage.content : null,
+          unreadCount,
+        };
+      })
+    );
+
+    res.status(200).json({
       success: true,
-      data: {
-        friends: friendsWithoutConversation,
-        total: friendsWithoutConversation.length
-      },
-      message: 'Friends with no messages retrieved successfully'
+      data: friendsWithConversations
     });
 
   } catch (error) {
-    console.error('Error getting friends with no conversation:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-      error: error.message
-    });
+    console.error("❌ Error fetching friends with conversations:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
