@@ -116,8 +116,9 @@ const Discovery = () => {
     }
   };
 
-  const handleCardClick = (userId) => {
-    navigate(`/userprofile/${userId}`);
+  const handleCardClick = (reqId) => {
+    console.log("userID" , reqId);
+    navigate(`/userprofile/${reqId}`);
   };
 
   const getInterestIcon = (interest) => {
@@ -216,22 +217,22 @@ const Discovery = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredUsers.map((user) => (
+            {filteredUsers.map((req) => (
               <div
-                key={user.id}
+                key={req.id}
                 className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 cursor-pointer group overflow-hidden"
-                onClick={() => handleCardClick(user.id)}
+                onClick={() => handleCardClick(req.id)}
               >
                 {/* Image Section */}
                 <div className="relative">
                   <img
-                    src={user.photos[0]}
-                    alt={user.name}
+                    src={req.photos[0]}
+                    alt={req.name}
                     className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-300"
                   />
 
                   {/* Online Status */}
-                  {user.isOnline && (
+                  {req.isOnline && (
                     <div className="absolute top-3 right-3 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
                   )}
 
@@ -239,7 +240,7 @@ const Discovery = () => {
                   <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1">
                     <div className="flex items-center gap-1">
                       <Heart className="w-4 h-4 text-pink-500 fill-current" />
-                      <span className="text-sm font-semibold text-gray-800">{user.compatibility}%</span>
+                      <span className="text-sm font-semibold text-gray-800">{req.compatibility}%</span>
                     </div>
                   </div>
                 </div>
@@ -249,10 +250,10 @@ const Discovery = () => {
                   {/* Name and Location */}
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <h3 className="font-bold text-lg text-gray-800 truncate">{user.name}</h3>
+                      <h3 className="font-bold text-lg text-gray-800 truncate">{req.name}</h3>
                       <div className="flex items-center gap-1 text-gray-500 mt-1">
                         <MapPin className="w-4 h-4" />
-                        <span className="text-sm">{user.location}</span>
+                        <span className="text-sm">{req.location}</span>
                       </div>
                     </div>
                     <button 
@@ -264,28 +265,28 @@ const Discovery = () => {
                   </div>
 
                   {/* Bio */}
-                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{user.bio}</p>
+                  <p className="text-gray-600 text-sm mb-4 line-clamp-2">{req.bio}</p>
 
                   {/* Professional Info */}
                   <div className="flex items-center gap-4 text-sm text-gray-500 mb-4">
-                    {user.occupation && user.occupation !== "Unspecified" && (
+                    {req.occupation && req.occupation !== "Unspecified" && (
                       <div className="flex items-center gap-1">
                         <Briefcase className="w-4 h-4" />
                         <span className="truncate">{user.occupation}</span>
                       </div>
                     )}
-                    {user.education && user.education !== "N/A" && (
+                    {req.education && req.education !== "N/A" && (
                       <div className="flex items-center gap-1">
                         <GraduationCap className="w-4 h-4" />
-                        <span className="truncate">{user.education}</span>
+                        <span className="truncate">{req.education}</span>
                       </div>
                     )}
                   </div>
 
                   {/* Interests */}
-                  {user.interests.length > 0 && (
+                  {req.interests.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-4">
-                      {user.interests.slice(0, 3).map((interest, i) => {
+                      {req.interests.slice(0, 3).map((interest, i) => {
                         const Icon = getInterestIcon(interest);
                         return (
                           <span
@@ -308,17 +309,17 @@ const Discovery = () => {
                   {/* Action Button */}
                   <button
                     onClick={(e) =>
-                      user.friendStatus === "pending"
-                        ? handleCancelRequest(user.chatRequestId, e)
-                        : handleAddFriend(user.id, e)
+                      req.friendStatus === "pending"
+                        ? handleCancelRequest(req.chatRequestId, e)
+                        : handleAddFriend(req.id, e)
                     }
                     className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all ${
-                      user.friendStatus === "pending"
+                      req.friendStatus === "pending"
                         ? "bg-red-50 text-red-600 hover:bg-red-100 border border-red-200"
                         : "bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:shadow-lg"
                     }`}
                   >
-                    {user.friendStatus === "pending" ? (
+                    {req.friendStatus === "pending" ? (
                       <>
                         <span>Cancel Request</span>
                       </>
