@@ -1,12 +1,13 @@
 
-import { useEffect, useState } from "react";
+
+import { useEffect, useState, useContext } from "react";
 import axios from "axios";
-import { 
-  Users, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
-  MessageCircle, 
+import {
+  Users,
+  Clock,
+  CheckCircle,
+  XCircle,
+  MessageCircle,
   MoreHorizontal,
   User,
   Mail,
@@ -18,68 +19,142 @@ import {
   MapPin
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { AuthContext } from '../Context/Authcontext.js';
 
 const IncomingRequests = () => {
-      const BASE_URL = "https://shadii-com.onrender.com";
+  const BASE_URL = "https://shadii-com.onrender.com";
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const { currentuser } = useContext(AuthContext);
+
+  console.log("Current user:", currentuser?.id || currentuser?._id);
+
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const res = await axios.get(`${BASE_URL}/api/user/request/getrequest`, {
-          withCredentials: true,
-        });
+        const userId = currentuser?.id || currentuser?._id;
+        
+        if (!userId) {
+          console.error("No user ID found");
+          setLoading(false);
+          return;
+        }
 
-        if (res.data.success) {
-          setRequests(res.data.data);
+        console.log("Fetching requests for user:", userId);
+        
+        const res = await axios.get(
+          `${BASE_URL}/api/user/request/incoming/${userId}`, 
+          {
+            withCredentials: true,
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          }
+        );
+
+        console.log("API Response:", res);
+        console.log("Response data:", res.data);
+
+        if (res.data && res.data.success) {
+          setRequests(res.data.data || []);
+        } else {
+          console.error("API returned success: false", res.data?.message);
+          toast.error(res.data?.message || "Failed to load requests");
+          setRequests([]);
         }
       } catch (err) {
-        console.error("Error fetching requests:", err.response?.data);
-        toast.error("Failed to load requests");
+        console.error("Error fetching requests:", err);
+        if (err.response) {
+          console.error("Response error:", err.response.data);
+          console.error("Status code:", err.response.status);
+          toast.error(err.response.data?.message || "Failed to load requests");
+        } else if (err.request) {
+          console.error("No response received:", err.request);
+          toast.error("No response from server");
+        } else {
+          console.error("Request setup error:", err.message);
+          toast.error("Request failed");
+        }
+        setRequests([]);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRequests();
-  }, []);
+    if (currentuser) {
+      fetchRequests();
+    } else {
+      setLoading(false);
+    }
+  }, [currentuser]);
 
   const handleAccept = async (requestId) => {
     try {
+      console.log("Accepting request:", requestId);
+      
       const res = await axios.post(
         `${BASE_URL}/api/user/request/${requestId}/accept`,
         {},
-        { withCredentials: true }
+        { 
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
       );
 
-      if (res.data.success) {
+      console.log("Accept response:", res.data);
+
+      if (res.data && res.data.success) {
         toast.success("Request accepted!");
         setRequests(prev => prev.filter(req => req._id !== requestId));
+      } else {
+        toast.error(res.data?.message || "Failed to accept request");
       }
     } catch (err) {
-      toast.error("Something went wrong");
-      console.error("Error accepting request:", err.response?.data);
+      console.error("Error accepting request:", err);
+      if (err.response) {
+        console.error("Response error:", err.response.data);
+        toast.error(err.response.data?.message || "Failed to accept request");
+      } else {
+        toast.error("Network error");
+      }
     }
   };
 
   const handleReject = async (requestId) => {
-     console.log(requestId)
     try {
+      console.log("Rejecting request:", requestId);
+      
       const res = await axios.post(
         `${BASE_URL}/api/user/request/${requestId}/reject`,
         {},
-        { withCredentials: true }
+        { 
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        }
       );
-   console.log(requestId);
-      if (res.data.success) {
-        toast.success("Request declined");
+
+      console.log("Reject response:", res.data);
+
+      if (res.data && res.data.success) {
+        toast.success("Request rejected!");
         setRequests(prev => prev.filter(req => req._id !== requestId));
+      } else {
+        toast.error(res.data?.message || "Failed to reject request");
       }
     } catch (err) {
-      toast.error("Something went wrong");
-      console.error("Error rejecting request:", err.response?.data);
+      console.error("Error rejecting request:", err);
+      if (err.response) {
+        console.error("Response error:", err.response.data);
+        toast.error(err.response.data?.message || "Failed to reject request");
+      } else {
+        toast.error("Network error");
+      }
     }
   };
 
@@ -87,11 +162,16 @@ const IncomingRequests = () => {
     return `${firstName?.charAt(0) || ''}${lastName?.charAt(0) || ''}`.toUpperCase();
   };
 
-  const filteredRequests = requests.filter(req => 
-    req.sender.personalInfo?.firstName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.sender.personalInfo?.lastName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.sender.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRequests = requests.filter(req => {
+    const firstName = req.sender?.personalInfo?.firstName?.toLowerCase() || '';
+    const lastName = req.sender?.personalInfo?.lastName?.toLowerCase() || '';
+    const email = req.sender?.email?.toLowerCase() || '';
+    const query = searchTerm.toLowerCase();
+    
+    return firstName.includes(query) || 
+           lastName.includes(query) || 
+           email.includes(query);
+  });
 
   if (loading) {
     return (
@@ -124,7 +204,7 @@ const IncomingRequests = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Search Bar - Desktop */}
             <div className="hidden md:block flex-1 max-w-md mx-8">
               <div className="relative">
@@ -189,7 +269,7 @@ const IncomingRequests = () => {
               {requests.length === 0 ? "No connection requests" : "No matching requests"}
             </h3>
             <p className="text-gray-500">
-              {requests.length === 0 
+              {requests.length === 0
                 ? "When someone sends you a connection request, it will appear here."
                 : "Try adjusting your search terms."
               }
@@ -204,26 +284,26 @@ const IncomingRequests = () => {
                     {/* User Info */}
                     <div className="flex items-start space-x-4 flex-1">
                       <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                        {getInitials(req.sender.personalInfo?.firstName, req.sender.personalInfo?.lastName)}
+                        {getInitials(req.sender?.personalInfo?.firstName, req.sender?.personalInfo?.lastName)}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center space-x-2 mb-1">
                           <h3 className="text-lg font-semibold text-gray-900 truncate">
-                            {req.sender.personalInfo?.firstName} {req.sender.personalInfo?.lastName}
+                            {req.sender?.personalInfo?.firstName || 'Unknown'} {req.sender?.personalInfo?.lastName || 'User'}
                           </h3>
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
                             <Clock className="w-3 h-3 mr-1" />
                             Pending
                           </span>
                         </div>
-                        
+
                         <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 text-gray-500 text-sm mb-3">
                           <div className="flex items-center space-x-1 mb-1 sm:mb-0">
                             <Mail className="w-4 h-4" />
-                            <span className="truncate">{req.sender.email}</span>
+                            <span className="truncate">{req.sender?.email || 'No email'}</span>
                           </div>
-                          {req.sender.location?.city && (
+                          {req.sender?.location?.city && (
                             <div className="flex items-center space-x-1">
                               <MapPin className="w-4 h-4" />
                               <span>{req.sender.location.city}</span>
@@ -232,7 +312,7 @@ const IncomingRequests = () => {
                         </div>
 
                         {/* Interests */}
-                        {req.sender.lifestyleInfo?.interests?.length > 0 && (
+                        {req.sender?.lifestyleInfo?.interests?.length > 0 && (
                           <div className="flex flex-wrap gap-2 mb-4">
                             {req.sender.lifestyleInfo.interests.slice(0, 4).map((interest, index) => (
                               <span
@@ -272,8 +352,7 @@ const IncomingRequests = () => {
                         <span>Accept</span>
                       </button>
                       <button
-                        onClick={() => handleReject(req._id)
-                        }
+                        onClick={() => handleReject(req._id)}
                         className="inline-flex items-center justify-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
                         <X className="w-4 h-4" />
