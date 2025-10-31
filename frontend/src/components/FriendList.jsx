@@ -29,20 +29,23 @@ const FriendsList = () => {
     currentuser,
     isLoggedIn,
   } = useContext(AuthContext);
+   console.log("🧍 Current user ID:", currentuser?._id || currentuser?.id);
 
   useEffect(() => {
     const fetchFriends = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${BASE_URL}/api/user/request/friends`, {
+        const res = await axios.get(`${BASE_URL}/api/user/request/friends/${currentuser?._id || currentuser?.id}`, {
           withCredentials: true,
         });
 
         console.log("Friends API Response:", res);
 
+        //  console.log("this is res" ,  res.data.friends);
+
         if (res.data.success) {
           // Handle both array and object responses
-          const friendsData = res.data.data || [];
+          const friendsData = res.data.friends|| [];
           const friendData = friendsData.map((friend) => {
             // Handle different response structures
             const userData = friend.user || friend;
