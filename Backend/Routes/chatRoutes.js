@@ -8,7 +8,7 @@ import {
   getFriends, 
   getFriendsWithConversations, 
   getFriendsWithNoConversation, 
-  getIncomingRequestcount, 
+  getIncomingRequests, 
   getOutgoingRequests, // Add this import
   sendChatRequest 
 } from '../Controllers/SendChatRequest.js'
@@ -44,6 +44,6 @@ ChatRoutes.get("/chat/:id/messages", isAuth, getChatMessages);
 
 
 
-ChatRoutes.get('/incoming/:id', isAuth,  getIncomingRequestcount );
+ChatRoutes.get('/incoming/:id', isAuth, getIncomingRequests );
 
 export default ChatRoutes;
