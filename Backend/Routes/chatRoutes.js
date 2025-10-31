@@ -1,38 +1,49 @@
 import express from "express";
 import { isAuth } from '../Middleware/IsAuth.js'
-
-import { acceptChatRequest, getConnectionStatus, getFriends, getFriendsWithConversations, getFriendsWithNoConversation, getIncomingRequests, rejectChatRequest, sendChatRequest } from '../Controllers/SendChatRequest.js'
+import { 
+  acceptChatRequest, 
+  cancelChatRequest, 
+  cancelChatRequestByUser, 
+  getConnectionStatus, 
+  getFriends, 
+  getFriendsWithConversations, 
+  getFriendsWithNoConversation, 
+  getIncomingRequestcount, 
+  getOutgoingRequests, // Add this import
+  sendChatRequest 
+} from '../Controllers/SendChatRequest.js'
 import { getChatMessages, getOrCreateChat, sendMessage } from "../Controllers/FriendsChat.js";
-
 
 const ChatRoutes = express.Router();
 
-// Chat request system
+// 🟢 CHAT REQUEST SYSTEM
 ChatRoutes.post("/chat-request/send", isAuth, sendChatRequest);
-ChatRoutes.post("/:id/accept", isAuth, acceptChatRequest);
-ChatRoutes.post("/:id/reject", isAuth, rejectChatRequest);
+ChatRoutes.get("/status", isAuth, getConnectionStatus);
+
+// Request management
+ChatRoutes.put("/accept", isAuth, acceptChatRequest); // Changed to PUT
+ChatRoutes.put("/cancel-by-user", isAuth, cancelChatRequestByUser); // Changed to PUT
+ChatRoutes.put("/cancel-request", isAuth, cancelChatRequest); // Changed parameter name and method
+
+// Get requests
+
+ChatRoutes.get('/requests/outgoing', isAuth, getOutgoingRequests); // New route
+
+
+// 🟢 FRIENDS SYSTEM
+ChatRoutes.get("/friends/:id", isAuth, getFriends);
+ChatRoutes.get("/friends/with-conversations/:id", isAuth, getFriendsWithConversations);
+ChatRoutes.get("/friends/no-conversations/:id", isAuth, getFriendsWithNoConversation);
 
 
 
-// messaging start 
-ChatRoutes.post("/chat/:id/message", isAuth, sendMessage)
-ChatRoutes.get("/chat/:id/messages", isAuth, getChatMessages)
-
-
-// routes/ChatRoutes.js
-ChatRoutes.get("/status/:userId", isAuth, getConnectionStatus);
-//   get chat user with conversation withcovert not allowed 
-ChatRoutes.get("/chat-friends", isAuth, getFriendsWithConversations);
-ChatRoutes.get("/chat/-NoMessage", isAuth, getFriendsWithNoConversation);
-// ✅ Get all connected friends
-ChatRoutes.get("/friends", isAuth, getFriends);
-
-//  get how many reques  comes 
-ChatRoutes.get('/getrequest', isAuth, getIncomingRequests);
+// 🟢 MESSAGING SYSTEM
+ChatRoutes.get("/chat/:userId", isAuth, getOrCreateChat);
+ChatRoutes.post("/chat/:id/message", isAuth, sendMessage);
+ChatRoutes.get("/chat/:id/messages", isAuth, getChatMessages);
 
 
 
-ChatRoutes.get("/chat/:userId", isAuth, getOrCreateChat); // Get or create chat with specific user
-
+ChatRoutes.get('/incoming/:id', isAuth,  getIncomingRequestcount );
 
 export default ChatRoutes;
