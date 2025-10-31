@@ -49,7 +49,7 @@ function App() {
             handleAddFriend={handleAddFriend} />} />
           <Route path="/matches" element={<FriendList />} />
           <Route path="/chat/:friendId" element={<ChatInterface />} />
-          <Route path="/userprofile/:userId" element={<User_induvisual />} />
+          <Route path="/userprofile/:reqId" element={<User_induvisual />} />
           <Route path='/getnotification' element={<IncomingRequests />} />
           <Route path='/Doc' element={<Doc />} />
           <Route path='/messages' element={<ChatsList />} />
