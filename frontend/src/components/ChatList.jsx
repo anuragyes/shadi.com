@@ -8,22 +8,19 @@ import { AuthContext } from '../Context/Authcontext.js';
 import { 
     Search, 
     Video, 
-    MoreHorizontal,
-    Camera,
     Mail,
     CheckCheck,
     Clock,
     UserPlus,
     ArrowLeft,
-    Menu,
     Users,
     MessageCircle
 } from 'lucide-react';
 
 const ChatList = () => {
-      const BASE_URL = "https://shadii-com.onrender.com"; // use production URL
+    const BASE_URL = "https://shadii-com.onrender.com";
     const [friends, setFriends] = useState([]);
-    const [generalFriends, setGeneralFriends] = useState([]); // Friends without conversations
+    const [generalFriends, setGeneralFriends] = useState([]);
     const [filteredFriends, setFilteredFriends] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
@@ -32,21 +29,49 @@ const ChatList = () => {
     const navigate = useNavigate();
     const { currentuser } = useContext(AuthContext);
 
+    console.log("Current user:", currentuser?.id || currentuser?._id);
+
     // Fetch friends WITH conversations
     const fetchChatFriends = async () => {
         try {
             setLoading(true);
-            const res = await axios.get(`${BASE_URL}/api/user/request/chat-friends`, {
-                withCredentials: true,
-            });
+            const userId = currentuser?.id || currentuser?._id;
             
-            if (res.data.success) {
-                setFriends(res.data.data.friends);
-                setFilteredFriends(res.data.data.friends);
-                console.log("Chat friends:", res.data.data.friends);
+            if (!userId) {
+                console.error("No user ID found");
+                return;
+            }
+
+            console.log("Fetching chat friends for user:", userId);
+            
+            const res = await axios.get(
+                `${BASE_URL}/api/user/request/friends/with-conversations/${userId}`, 
+                {
+                    withCredentials: true,
+                   
+                }
+            );
+
+            console.log("Chat friends API response:", res.data);
+            
+            if (res.data && res.data.success) {
+                // FIXED: Backend returns res.data.data (array), not res.data.data.friends
+                const friendsData = res.data.data || [];
+                setFriends(friendsData);
+                setFilteredFriends(friendsData);
+                console.log("Chat friends data:", friendsData);
+            } else {
+                console.error("Chat friends API returned success: false", res.data?.message);
+                setFriends([]);
+                setFilteredFriends([]);
             }
         } catch (error) {
             console.error("Error fetching chat friends:", error);
+            if (error.response) {
+                console.error("Response error:", error.response.data);
+            }
+            setFriends([]);
+            setFilteredFriends([]);
         } finally {
             setLoading(false);
         }
@@ -55,42 +80,52 @@ const ChatList = () => {
     // Fetch friends WITHOUT conversations (General tab)
     const fetchGeneralFriends = async () => {
         try {
-            const res = await axios.get(`${BASE_URL}/api/user/request/chat/-NoMessage`, {
-                withCredentials: true,
-            });
+            const userId = currentuser?.id || currentuser?._id;
             
-            if (res.data.success) {
-                setGeneralFriends(res.data.data.friends || []);
-                console.log("General friends:", res.data.data.friends);
+            if (!userId) {
+                console.error("No user ID found");
+                return;
+            }
+
+            console.log("Fetching general friends for user:", userId);
+            
+            const res = await axios.get(
+                `${BASE_URL}/api/user/request/friends/no-conversations/${userId}`, 
+                {
+                    withCredentials: true,
+                    
+                }
+            );
+
+            console.log("General friends API response:", res.data);
+            
+            if (res.data && res.data.success) {
+                // FIXED: Backend returns res.data.data, not res.data.friends
+                const generalFriendsData = res.data.data || [];
+                setGeneralFriends(generalFriendsData);
+                console.log("General friends data:", generalFriendsData);
+            } else {
+                console.error("General friends API returned success: false", res.data?.message);
+                setGeneralFriends([]);
             }
         } catch (error) {
             console.error("Error fetching general friends:", error);
-            // If API fails, you can use mock data as fallback
-            setGeneralFriends([
-                {
-                    _id: '6',
-                    personalInfo: { firstName: 'Alex', lastName: 'Johnson', fullName: 'Alex Johnson' },
-                    profilePhotos: [],
-                    isActive: true,
-                    lastSeen: new Date(),
-                    matchDate: new Date(Date.now() - 86400000) // 1 day ago
-                },
-                {
-                    _id: '7',
-                    personalInfo: { firstName: 'Maria', lastName: 'Garcia', fullName: 'Maria Garcia' },
-                    profilePhotos: [],
-                    isActive: false,
-                    lastSeen: new Date(Date.now() - 172800000), // 2 days ago
-                    matchDate: new Date(Date.now() - 259200000) // 3 days ago
-                }
-            ]);
+            if (error.response) {
+                console.error("Response error:", error.response.data);
+            }
+         
+           
         }
     };
 
     useEffect(() => {
         if (currentuser) {
+            console.log("Current user found, fetching friends...");
             fetchChatFriends();
             fetchGeneralFriends();
+        } else {
+            console.log("No current user found");
+            setLoading(false);
         }
     }, [currentuser]);
 
@@ -104,10 +139,18 @@ const ChatList = () => {
             }
         } else {
             const sourceArray = activeTab === 'primary' ? friends : generalFriends;
-            const filtered = sourceArray.filter(friend =>
-                friend.personalInfo?.fullName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                friend.personalInfo?.firstName?.toLowerCase().includes(searchQuery.toLowerCase())
-            );
+            const filtered = sourceArray.filter(friend => {
+                const firstName = friend.personalInfo?.firstName?.toLowerCase() || '';
+                const lastName = friend.personalInfo?.lastName?.toLowerCase() || '';
+                const fullName = `${firstName} ${lastName}`.toLowerCase();
+                const name = friend.name?.toLowerCase() || '';
+                const query = searchQuery.toLowerCase();
+                
+                return firstName.includes(query) || 
+                       lastName.includes(query) || 
+                       fullName.includes(query) ||
+                       name.includes(query);
+            });
             setFilteredFriends(filtered);
         }
     }, [searchQuery, friends, generalFriends, activeTab]);
@@ -119,52 +162,61 @@ const ChatList = () => {
         } else {
             setFilteredFriends(generalFriends);
         }
-        setSearchQuery(''); // Clear search when switching tabs
+        setSearchQuery('');
     }, [activeTab, friends, generalFriends]);
 
     const formatTime = (timestamp) => {
         if (!timestamp) return '';
         
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffInHours = (now - date) / (1000 * 60 * 60);
-        
-        if (diffInHours < 1) {
-            const minutes = Math.floor(diffInHours * 60);
-            return `${minutes}m`;
-        } else if (diffInHours < 24) {
-            return `${Math.floor(diffInHours)}h`;
-        } else if (diffInHours < 168) {
-            return `${Math.floor(diffInHours / 24)}d`;
-        } else {
-            return date.toLocaleDateString('en-US', { month: 'short', 'day': 'numeric' });
+        try {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffInHours = (now - date) / (1000 * 60 * 60);
+            
+            if (diffInHours < 1) {
+                const minutes = Math.floor(diffInHours * 60);
+                return `${minutes}m`;
+            } else if (diffInHours < 24) {
+                return `${Math.floor(diffInHours)}h`;
+            } else if (diffInHours < 168) {
+                return `${Math.floor(diffInHours / 24)}d`;
+            } else {
+                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+        } catch (error) {
+            return '';
         }
     };
 
     const formatMatchTime = (timestamp) => {
         if (!timestamp) return 'Recently matched';
         
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-        
-        if (diffInDays === 0) return 'Today';
-        if (diffInDays === 1) return 'Yesterday';
-        if (diffInDays < 7) return `${diffInDays} days ago`;
-        if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
-        return `${Math.floor(diffInDays / 30)} months ago`;
+        try {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffInDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+            
+            if (diffInDays === 0) return 'Today';
+            if (diffInDays === 1) return 'Yesterday';
+            if (diffInDays < 7) return `${diffInDays} days ago`;
+            if (diffInDays < 30) return `${Math.floor(diffInDays / 7)} weeks ago`;
+            return `${Math.floor(diffInDays / 30)} months ago`;
+        } catch (error) {
+            return 'Recently matched';
+        }
     };
 
     const getStatusIcon = (friend) => {
-        if (friend.isActive) {
+        if (friend.isOnline || friend.isActive) {
             return <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>;
         }
         return null;
     };
 
     const getMessageStatus = (message) => {
-        if (!message || !message.isSentByMe) return null;
+        if (!message) return null;
         
+        // Adjust based on your actual message structure
         if (message.read) {
             return <CheckCheck className="w-3 h-3 text-blue-400" />;
         } else {
@@ -173,45 +225,42 @@ const ChatList = () => {
     };
 
     const handleChatClick = (friend) => {
-        navigate(`/chat/${friend._id}`, { 
+        const friendId = friend.friendId || friend._id;
+        navigate(`/chat/${friendId}`, { 
             state: { 
-                friendName: friend.personalInfo?.fullName || 'User' 
+                friendName: getDisplayName(friend),
+                chatId: friend.chatId
             } 
         });
     };
 
-    const handleStartChat = (friend) => {
-        navigate(`/chat/${friend._id}`, { 
-            state: { 
-                friendName: friend.personalInfo?.fullName || 'User',
-                isNewChat: true
-            } 
-        });
-    };
+      console.log("trhis is caht ")
+
+    // const handleStartChat = (friend) => {
+    //     navigate(`/chat/${friend.id}`, { 
+    //         state: { 
+    //             friendName: getDisplayName(friend),
+    //             isNewChat: true
+    //         } 
+    //     });
+    // };
 
     const getMessagePreview = (friend) => {
         if (!friend.lastMessage) {
-            if (activeTab === 'general') {
-                return <span className="text-gray-400 italic">No messages yet</span>;
-            }
-            return 'Start a conversation';
+            return <span className="text-gray-400 italic">No messages yet</span>;
         }
         
         let prefix = '';
-        if (friend.lastMessage.isSentByMe) {
+        // Check if last message was sent by current user
+        if (friend.lastMessage.sender === currentuser?.id) {
             prefix = 'You: ';
         }
         
-        // Add special indicators
-        if (friend.lastMessage.message === '•••') {
-            return <span className="text-purple-300">Typing...</span>;
-        }
-        
         if (friend.unreadCount > 0) {
-            return <span className="text-white font-medium">{prefix}{friend.lastMessage.message}</span>;
+            return <span className="text-white font-medium">{prefix}{friend.lastMessage}</span>;
         }
         
-        return <span className="text-gray-300">{prefix}{friend.lastMessage.message}</span>;
+        return <span className="text-gray-300">{prefix}{friend.lastMessage}</span>;
     };
 
     const getGeneralPreview = (friend) => {
@@ -223,6 +272,25 @@ const ChatList = () => {
                 </span>
             </div>
         );
+    };
+
+    // Helper function to get display name
+    const getDisplayName = (friend) => {
+        if (friend.name) return friend.name; // For friends with conversations
+        if (friend.personalInfo) {
+            return `${friend.personalInfo.firstName || ''} ${friend.personalInfo.lastName || ''}`.trim();
+        }
+        return 'User';
+    };
+
+    // Helper function to get profile photo
+    const getProfilePhoto = (friend) => {
+        return friend.profilePhoto || (friend.profilePhotos && friend.profilePhotos[0]);
+    };
+
+    // Helper function to get last message timestamp
+    const getLastMessageTime = (friend) => {
+        return friend.lastMessageAt || friend.lastMessage?.timestamp;
     };
 
     if (loading) {
@@ -245,7 +313,7 @@ const ChatList = () => {
                     {/* Header */}
                     <div className="p-6 border-b border-white/10">
                         <div className="flex items-center justify-between">
-                            <h1 className="text-2xl font-bold bg-linear-to-rfrom-pink-400 to-purple-400 bg-clip-text text-transparent">
+                            <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-400 to-purple-400 bg-clip-text text-transparent">
                                 Messages
                             </h1>
                             <div className="flex space-x-3">
@@ -333,28 +401,28 @@ const ChatList = () => {
                                 </p>
                             </div>
                         ) : (
-                            filteredFriends.map((friend, index) => (
+                            filteredFriends.map((friend) => (
                                 <div
-                                    key={friend._id}
+                                    key={friend.friendId || friend._id}
                                     className={`flex items-center px-6 py-4 hover:bg-white/5 cursor-pointer border-b border-white/5 transition-all duration-200 group ${
                                         activeTab === 'general' ? 'flex-col items-start space-y-3' : ''
                                     }`}
-                                    onClick={() => activeTab === 'primary' ? handleChatClick(friend) : handleStartChat(friend)}
+                                    // onClick={() => activeTab === 'primary' ? handleChatClick(friend) : handleStartChat(friend)}
                                 >
                                     <div className="flex items-center w-full">
                                         {/* Avatar */}
                                         <div className="relative flex-shrink-0">
                                             <div className={`${
                                                 activeTab === 'primary' ? 'w-12 h-12' : 'w-14 h-14'
-                                            } bg-linear-to-rfrom-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg`}>
-                                                {friend.profilePhotos && friend.profilePhotos.length > 0 ? (
+                                            } bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg`}>
+                                                {getProfilePhoto(friend) ? (
                                                     <img 
-                                                        src={friend.profilePhotos[0]} 
-                                                        alt={friend.personalInfo?.firstName}
+                                                        src={getProfilePhoto(friend)} 
+                                                        alt={getDisplayName(friend)}
                                                         className="w-full h-full rounded-full object-cover"
                                                     />
                                                 ) : (
-                                                    friend.personalInfo?.firstName?.charAt(0) || 'U'
+                                                    getDisplayName(friend).charAt(0) || 'U'
                                                 )}
                                             </div>
                                             {getStatusIcon(friend)}
@@ -364,12 +432,12 @@ const ChatList = () => {
                                         <div className="flex-1 ml-4 min-w-0">
                                             <div className="flex items-center justify-between">
                                                 <h3 className="font-semibold text-white text-sm truncate">
-                                                    {friend.personalInfo?.fullName || 'User'}
+                                                    {getDisplayName(friend)}
                                                 </h3>
                                                 {activeTab === 'primary' && (
                                                     <div className="flex items-center space-x-1 text-xs text-gray-400">
-                                                        {friend.lastMessage?.timestamp && (
-                                                            <span>{formatTime(friend.lastMessage.timestamp)}</span>
+                                                        {getLastMessageTime(friend) && (
+                                                            <span>{formatTime(getLastMessageTime(friend))}</span>
                                                         )}
                                                         {getMessageStatus(friend.lastMessage)}
                                                     </div>
@@ -384,7 +452,7 @@ const ChatList = () => {
                                                 {/* Unread indicator for primary tab */}
                                                 {activeTab === 'primary' && friend.unreadCount > 0 && (
                                                     <div className="ml-2 bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 shadow-lg">
-                                                        {friend.unreadCount}
+                                                        {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
                                                     </div>
                                                 )}
                                             </div>
@@ -392,17 +460,7 @@ const ChatList = () => {
                                     </div>
 
                                     {/* Start Chat Button for General Tab */}
-                                    {activeTab === 'general' && (
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleStartChat(friend);
-                                            }}
-                                            className="w-full bg-linear-to-rfrom-pink-500 to-purple-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
-                                        >
-                                            Start Chat
-                                        </button>
-                                    )}
+                                    
                                 </div>
                             ))
                         )}
@@ -412,7 +470,7 @@ const ChatList = () => {
                 {/* Main Content Area - Preview */}
                 <div className="flex-1 flex items-center justify-center p-12">
                     <div className="text-center max-w-md">
-                        <div className="w-24 h-24 bg-linear-to-rfrom-pink-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
+                        <div className="w-24 h-24 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl">
                             {activeTab === 'primary' ? (
                                 <Mail className="w-10 h-10 text-white" />
                             ) : (
@@ -428,7 +486,7 @@ const ChatList = () => {
                                 : 'Connect with your matches and start new conversations.'
                             }
                         </p>
-                        <button className="bg-linear-to-rfrom-pink-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
+                        <button className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
                             {activeTab === 'primary' ? 'Send Message' : 'Browse Matches'}
                         </button>
                     </div>
@@ -538,7 +596,7 @@ const ChatList = () => {
                     ) : (
                         filteredFriends.map((friend) => (
                             <div
-                                key={friend._id}
+                                key={friend.friendId || friend._id}
                                 className={`flex items-center px-4 py-3 hover:bg-white/5 cursor-pointer border-b border-white/5 active:bg-white/10 transition-colors ${
                                     activeTab === 'general' ? 'flex-col items-start space-y-3' : ''
                                 }`}
@@ -547,15 +605,15 @@ const ChatList = () => {
                                 <div className="flex items-center w-full">
                                     {/* Avatar */}
                                     <div className="relative flex-shrink-0">
-                                        <div className="w-14 h-14 bg-linear-to-rfrom-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
-                                            {friend.profilePhotos && friend.profilePhotos.length > 0 ? (
+                                        <div className="w-14 h-14 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-lg">
+                                            {getProfilePhoto(friend) ? (
                                                 <img 
-                                                    src={friend.profilePhotos[0]} 
-                                                    alt={friend.personalInfo?.firstName}
+                                                    src={getProfilePhoto(friend)} 
+                                                    alt={getDisplayName(friend)}
                                                     className="w-full h-full rounded-full object-cover"
                                                 />
                                             ) : (
-                                                friend.personalInfo?.firstName?.charAt(0) || 'U'
+                                                getDisplayName(friend).charAt(0) || 'U'
                                             )}
                                         </div>
                                         {getStatusIcon(friend)}
@@ -565,12 +623,12 @@ const ChatList = () => {
                                     <div className="flex-1 ml-3 min-w-0">
                                         <div className="flex items-center justify-between">
                                             <h3 className="font-semibold text-white text-sm truncate">
-                                                {friend.personalInfo?.fullName || 'User'}
+                                                {getDisplayName(friend)}
                                             </h3>
                                             {activeTab === 'primary' && (
                                                 <div className="flex items-center space-x-1 text-xs text-gray-400">
-                                                    {friend.lastMessage?.timestamp && (
-                                                        <span>{formatTime(friend.lastMessage.timestamp)}</span>
+                                                    {getLastMessageTime(friend) && (
+                                                        <span>{formatTime(getLastMessageTime(friend))}</span>
                                                     )}
                                                     {getMessageStatus(friend.lastMessage)}
                                                 </div>
@@ -585,7 +643,7 @@ const ChatList = () => {
                                             {/* Unread indicator for primary tab */}
                                             {activeTab === 'primary' && friend.unreadCount > 0 && (
                                                 <div className="ml-2 bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center flex-shrink-0 shadow-lg">
-                                                    {friend.unreadCount}
+                                                    {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
                                                 </div>
                                             )}
                                         </div>
@@ -593,17 +651,7 @@ const ChatList = () => {
                                 </div>
 
                                 {/* Start Chat Button for General Tab */}
-                                {activeTab === 'general' && (
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleStartChat(friend);
-                                        }}
-                                        className="w-full bg-linear-to-rfrom-pink-500 to-purple-600 text-white py-2 px-4 rounded-xl text-sm font-semibold hover:shadow-lg transition-all duration-200 transform hover:scale-105 active:scale-95"
-                                    >
-                                        Start Chat
-                                    </button>
-                                )}
+                                
                             </div>
                         ))
                     )}
@@ -612,7 +660,7 @@ const ChatList = () => {
 
             {/* Floating Action Button */}
             <div className="fixed bottom-6 right-6 z-20">
-                <button className="w-14 h-14 bg-linear-to-rfrom-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-2xl hover:shadow-3xl transition-all duration-200 transform hover:scale-110 active:scale-95">
+                <button className="w-14 h-14 bg-gradient-to-r from-pink-500 to-purple-600 rounded-full flex items-center justify-center text-white shadow-2xl hover:shadow-3xl transition-all duration-200 transform hover:scale-110 active:scale-95">
                     <Mail className="w-6 h-6" />
                 </button>
             </div>
@@ -621,3 +669,4 @@ const ChatList = () => {
 };
 
 export default ChatList;
+
