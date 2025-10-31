@@ -9,48 +9,143 @@ import mongoose from "mongoose";
 // 🟢 GET INCOMING REQUESTS (requests sent *to* the logged-in user)
 
 
-// export const getIncomingRequestcount = async (req, res) => {
-//   try {
-//     const userId = req.params.id; // from URL
-//     if (!userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "User ID is required"
-//       });
-//     }
 
-//     console.log("📥 Counting incoming requests for user:", userId);
+// 🟢 ACCEPT CHAT REQUEST (when receiver accepts the pending request)
+export const acceptChatRequest = async (req, res) => {
+  try {
+    const { receiverId, senderId } = req.body;
 
-//     // Count all pending requests where the user is the receiver
-//     const count = await ChatRequest.countDocuments({
-//       receiver: userId,
-//       status: "pending"
-//     });
+    console.log("✅ Accepting request between:", senderId, "→", receiverId);
 
-//     console.log("📊 Incoming pending requests count:", count);
+    if (!senderId || !receiverId) {
+      return res.status(400).json({
+        success: false,
+        message: "Both senderId and receiverId are required",
+      });
+    }
 
-//     res.status(200).json({
-//       success: true,
-//       count: count
-//     });
+    // 🔍 Find the pending request between the users
+    const request = await ChatRequest.findOne({
+      sender: senderId,
+      receiver: receiverId,
+      status: "pending",
+    });
 
-//   } catch (error) {
-//     console.error("❌ Error getting incoming request count:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending request found between these users",
+      });
+    }
+
+    // ✅ Update request status to accepted
+    request.status = "accepted";
+    request.updatedAt = new Date();
+    await request.save();
+
+    console.log("🎯 Request accepted successfully:", request._id);
+
+    // 💬 Check or create chat room
+    try {
+      const existingChat = await Chat.findOne({
+        participants: { $all: [senderId, receiverId] },
+      });
+
+      if (!existingChat) {
+        const newChat = new Chat({
+          participants: [senderId, receiverId],
+          lastMessageAt: new Date(),
+        });
+        await newChat.save();
+        console.log("💬 New chat room created:", newChat._id);
+      } else {
+        console.log("💬 Chat room already exists:", existingChat._id);
+      }
+    } catch (chatError) {
+      console.error("⚠️ Chat creation error:", chatError);
+    }
+
+    // ✅ Response
+    return res.status(200).json({
+      success: true,
+      message: "Request accepted successfully",
+      status: "accepted",
+      data: request,
+    });
+
+  } catch (error) {
+    console.error("❌ Accept Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+export const cancelChatRequestByUser = async (req, res) => {
+  try {
+    const { senderId, receiverId } = req.body;
+
+    console.log("🗑️ Cancelling request between:", senderId, "and", receiverId);
+
+    // 🧩 Validation
+    if (!senderId || !receiverId) {
+      return res.status(400).json({
+        success: false,
+        message: "Both senderId and receiverId are required",
+      });
+    }
+
+    // 🔍 Find any request between these users (regardless of who sent it)
+    const request = await ChatRequest.findOne({
+      $or: [
+        { sender: senderId, receiver: receiverId },
+        { sender: receiverId, receiver: senderId }
+      ]
+    });
+
+    console.log("📋 Found request to cancel:", request);
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No request found between these users",
+      });
+    }
+
+    // ✅ Set status to "none" instead of deleting
+    request.status = "none";
+    request.updatedAt = new Date();
+    await request.save();
+
+    console.log("✅ Request status set to 'none':", request._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Request cancelled successfully. Status set to 'none'.",
+      data: request
+    });
+
+  } catch (error) {
+    console.error("❌ Cancel Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
 
 
 
 
 
-export const getIncomingRequestcount = async (req, res) => {
+export const getIncomingRequests = async (req, res) => {
   try {
     const userId = req.params.id;
+     console.log("this is user id" , userId)
 
+    // Validate ID
     if (!userId) {
       return res.status(400).json({
         success: false,
@@ -65,23 +160,58 @@ export const getIncomingRequestcount = async (req, res) => {
       });
     }
 
-    console.log("📥 Counting incoming requests for user:", userId);
+    console.log("📥 Fetching incoming requests for user:", userId);
 
-    const count = await ChatRequest.countDocuments({
+    // Find all pending requests where this user is the receiver
+    const requests = await ChatRequest.find({
       receiver: userId,
       status: "pending",
+    })
+      .populate("sender", "personalInfo email profilePhotos") // populate sender details
+      .populate("receiver", "personalInfo email") // populate receiver details
+      .sort({ createdAt: -1 }) // sort by latest first
+      .lean();
+
+    // console.log("📋 Raw populated requests:", requests);
+
+    // Enhanced request list with full sender information
+    const requestList = requests.map(req => {
+      const sender = req.sender || {};
+      const receiver = req.receiver || {};
+      
+      return {
+        requestId: req._id,
+        sender: {
+          _id: sender._id,
+          email: sender.email,
+          personalInfo: sender.personalInfo || {},
+          profilePhotos: sender.profilePhotos || []
+        },
+        receiver: {
+          _id: receiver._id,
+          email: receiver.email,
+          personalInfo: receiver.personalInfo || {}
+        },
+        message: req.message || null,
+        status: req.status,
+        createdAt: req.createdAt,
+        updatedAt: req.updatedAt
+      };
     });
 
-    console.log("📊 Incoming pending requests count:", count);
+    // console.log("🎯 Enhanced request list:", requestList);
+
+    console.log(`📊 Found ${requests.length} pending requests.`);
 
     res.status(200).json({
       success: true,
       userId,
-      count,
+      total: requests.length,
+      requests: requestList,
     });
 
   } catch (error) {
-    console.error("❌ Error getting incoming request count:", error.message);
+    console.error("❌ Error fetching incoming requests:", error.message);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -89,6 +219,57 @@ export const getIncomingRequestcount = async (req, res) => {
   }
 };
 
+
+// 🟢 CANCEL SPECIFIC REQUEST (by request ID)  as a user cancel request
+export const cancelChatRequest = async (req, res) => {
+  try {
+    const { receiverId, senderId } = req.body;
+
+    if (!receiverId || !senderId) {
+      return res.status(400).json({
+        success: false,
+        message: "receiverId and senderId are required",
+      });
+    }
+
+    console.log("🗑️ Cancel Request | Sender:", senderId, "Receiver:", receiverId);
+
+    // Find the pending chat request between these two users
+    const request = await ChatRequest.findOne({
+      $or: [
+        { sender: senderId, receiver: receiverId },
+        { sender: receiverId, receiver: senderId }
+      ],
+      status: "pending",
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending request found between these users",
+      });
+    }
+
+    // ✅ Update the request status instead of deleting
+    request.status = "none";
+    await request.save();
+
+    console.log("✅ Request status updated to 'none'");
+
+    return res.status(200).json({
+      success: true,
+      message: "Request cancelled successfully and status set to none",
+      data: request,
+    });
+
+  } catch (error) {
+    console.error("❌ Cancel Chat Request Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while cancelling request",
+    });
+  }
+};
 
 
 export const getConnectionStatus = async (req, res) => {
@@ -233,186 +414,13 @@ export const sendChatRequest = async (req, res) => {
 };
 
 // 🟢 CANCEL REQUEST BY USER ID (Universal cancel - sets status to "none")  someone cancel the request
-export const cancelChatRequestByUser = async (req, res) => {
-  try {
-    const { senderId, receiverId } = req.body;
 
-    console.log("🗑️ Cancelling request between:", senderId, "and", receiverId);
-
-    // 🧩 Validation
-    if (!senderId || !receiverId) {
-      return res.status(400).json({
-        success: false,
-        message: "Both senderId and receiverId are required",
-      });
-    }
-
-    // 🔍 Find any request between these users (regardless of who sent it)
-    const request = await ChatRequest.findOne({
-      $or: [
-        { sender: senderId, receiver: receiverId },
-        { sender: receiverId, receiver: senderId }
-      ]
-    });
-
-    console.log("📋 Found request to cancel:", request);
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: "No request found between these users",
-      });
-    }
-
-    // ✅ Set status to "none" instead of deleting
-    request.status = "none";
-    request.updatedAt = new Date();
-    await request.save();
-
-    console.log("✅ Request status set to 'none':", request._id);
-
-    res.status(200).json({
-      success: true,
-      message: "Request cancelled successfully. Status set to 'none'.",
-      data: request
-    });
-
-  } catch (error) {
-    console.error("❌ Cancel Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-
-// 🟢 CANCEL SPECIFIC REQUEST (by request ID)  as a user cancel request
-export const cancelChatRequest = async (req, res) => {
-  try {
-    const { receiverId, senderId } = req.body;
-
-    if (!receiverId || !senderId) {
-      return res.status(400).json({
-        success: false,
-        message: "receiverId and senderId are required",
-      });
-    }
-
-    console.log("🗑️ Cancel Request | Sender:", senderId, "Receiver:", receiverId);
-
-    // Find the pending chat request between these two users
-    const request = await ChatRequest.findOne({
-      $or: [
-        { sender: senderId, receiver: receiverId },
-        { sender: receiverId, receiver: senderId }
-      ],
-      status: "pending",
-    });
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: "No pending request found between these users",
-      });
-    }
-
-    // ✅ Update the request status instead of deleting
-    request.status = "none";
-    await request.save();
-
-    console.log("✅ Request status updated to 'none'");
-
-    return res.status(200).json({
-      success: true,
-      message: "Request cancelled successfully and status set to none",
-      data: request,
-    });
-
-  } catch (error) {
-    console.error("❌ Cancel Chat Request Error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error while cancelling request",
-    });
-  }
-};
 
 
 // GET CONNECTION STATUS - return the actual status from DB
 
 
-// 🟢 ACCEPT CHAT REQUEST (when receiver accepts the pending request)
-export const acceptChatRequest = async (req, res) => {
-  try {
-    const { receiverId, senderId } = req.body;
 
-    console.log("✅ Accepting request between:", senderId, "→", receiverId);
-
-    if (!senderId || !receiverId) {
-      return res.status(400).json({
-        success: false,
-        message: "Both senderId and receiverId are required",
-      });
-    }
-
-    // 🔍 Find the pending request between the users
-    const request = await ChatRequest.findOne({
-      sender: senderId,
-      receiver: receiverId,
-      status: "pending",
-    });
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: "No pending request found between these users",
-      });
-    }
-
-    // ✅ Update request status to accepted
-    request.status = "accepted";
-    request.updatedAt = new Date();
-    await request.save();
-
-    console.log("🎯 Request accepted successfully:", request._id);
-
-    // 💬 Check or create chat room
-    try {
-      const existingChat = await Chat.findOne({
-        participants: { $all: [senderId, receiverId] },
-      });
-
-      if (!existingChat) {
-        const newChat = new Chat({
-          participants: [senderId, receiverId],
-          lastMessageAt: new Date(),
-        });
-        await newChat.save();
-        console.log("💬 New chat room created:", newChat._id);
-      } else {
-        console.log("💬 Chat room already exists:", existingChat._id);
-      }
-    } catch (chatError) {
-      console.error("⚠️ Chat creation error:", chatError);
-    }
-
-    // ✅ Response
-    return res.status(200).json({
-      success: true,
-      message: "Request accepted successfully",
-      status: "accepted",
-      data: request,
-    });
-
-  } catch (error) {
-    console.error("❌ Accept Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-};
 
 
 
