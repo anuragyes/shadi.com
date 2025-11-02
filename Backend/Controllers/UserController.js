@@ -31,7 +31,7 @@ export const getUserById = async (req, res) => {
     // 🧠 Handle "/me" endpoint
     if (id === "me") {
       // req.user must come from your auth middleware
-      id = req.user?._id; 
+      id = req.user?._id;
     }
 
     // 🧩 Validate the ObjectId format
@@ -57,27 +57,6 @@ export const getUserById = async (req, res) => {
   }
 };
 
-// export const getUserById = async (req, res) => {
-//   try {
-//     const { id } = req.params; // Get the ID from the URL
-//     if (!id) {
-//       return res.status(400).json({ success: false, message: "User ID is required" });
-//     }
-
-//     // Find the user in MongoDB (exclude sensitive fields)
-//     const user = await User.findById(id).select("-password -__v");
-
-//     if (!user) {
-//       return res.status(404).json({ success: false, message: "User not found" });
-//     }
-
-//     // Send back the user data
-//     return res.status(200).json({ success: true, data: { user } });
-//   } catch (error) {
-//     console.error("Get User by ID Error:", error);
-//     return res.status(500).json({ success: false, message: "Internal server error" });
-//   }
-// };
 
 export const updateUserProfile = async (req, res) => {
   try {
@@ -218,480 +197,9 @@ export const updateUserProfile = async (req, res) => {
     });
   }
 };
-// export const updateUserProfile = async (req, res) => {
-//   try {
-//     // Get userId from authenticated user (from middleware) instead of req.body
-//     // const userId = req.user?.userId || req.user?._id;
-//       const userId = req.body.id;
-//     console.log("UserID:", userId);
 
-//     if (!userId) {
-//       return res.status(401).json({ 
-//         success: false, 
-//         message: "Unauthorized: No user ID found from token." 
-//       });
-//     }
 
-//     let updates = req.body;
 
-//     // Parse updates if they're sent as JSON string
-//     if (typeof updates === 'string') {
-//       try {
-//         updates = JSON.parse(updates);
-//       } catch (parseError) {
-//         return res.status(400).json({ 
-//           success: false, 
-//           message: "Invalid JSON in request body." 
-//         });
-//       }
-//     }
-
-//     // Remove userId from updates if present to prevent security issues
-//     if (updates.id || updates._id) {
-//       delete updates.id;
-//       delete updates._id;
-//     }
-
-//     if (!updates || Object.keys(updates).length === 0) {
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "No data provided for update." 
-//       });
-//     }
-
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ 
-//         success: false, 
-//         message: "User not found." 
-//       });
-//     }
-
-//     const deepMerge = (target, source) => {
-//       for (const key in source) {
-//         // Skip prototype properties and sensitive fields
-//         if (!source.hasOwnProperty(key) || 
-//             ['password', 'role', 'accountStatus', 'verification', 'subscription', 'moderation'].includes(key)) {
-//           continue;
-//         }
-
-//         if (Array.isArray(source[key])) {
-//           target[key] = source[key];
-//         } else if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])) {
-//           if (!target[key] || typeof target[key] !== 'object') {
-//             target[key] = {};
-//           }
-//           deepMerge(target[key], source[key]);
-//         } else {
-//           // Handle special cases for the new schema
-//           if (key === 'dateOfBirth' && source[key] && target.personalInfo) {
-//             target.personalInfo.dateOfBirth = new Date(source[key]);
-//           } else {
-//             target[key] = source[key];
-//           }
-//         }
-//       }
-//       return target;
-//     };
-
-//     // Apply updates safely
-//     deepMerge(user, updates);
-
-//     // Updated profile completion calculation for new schema
-//     const calculateProgress = (u) => {
-//       const completionFields = [
-//         u.email,
-//         u.personalInfo?.firstName,
-//         u.personalInfo?.lastName,
-//         u.personalInfo?.gender,
-//         u.personalInfo?.dateOfBirth,
-//         u.personalInfo?.maritalStatus,
-//         u.religiousInfo?.religion,
-//         u.religiousInfo?.motherTongue,
-//         u.professionalInfo?.occupation,
-//         u.professionalInfo?.highestEducation?.degree,
-//         u.location?.current?.city,
-//         u.location?.current?.country,
-//         u.profilePhoto?.url
-//       ];
-
-//       const filledCount = completionFields.filter(val =>
-//         val !== undefined && 
-//         val !== null && 
-//         val !== '' && 
-//         !(Array.isArray(val) && val.length === 0) &&
-//         !(typeof val === 'object' && Object.keys(val).length === 0) // Check for empty objects
-//       ).length;
-
-//       return Math.min(Math.round((filledCount / completionFields.length) * 100), 100);
-//     };
-
-//     user.profileCompletion = calculateProgress(user);
-
-//     // Update lastActive timestamp
-//     user.lastActive = new Date();
-
-//     // Cloudinary upload helper
-//     const uploadToCloudinary = async (file) => {
-//       try {
-//         const result = await cloudinary.uploader.upload(file.path, {
-//           folder: "matrimony_users",
-//           resource_type: "image",
-//           transformation: [
-//             { width: 500, height: 500, crop: "limit", quality: "auto" }
-//           ]
-//         });
-
-//         // Safely delete file if it exists
-//         if (fs.existsSync(file.path)) {
-//           await fs.promises.unlink(file.path).catch(console.error);
-//         }
-
-//         return {
-//           url: result.secure_url,
-//           isApproved: false, // Default to false for moderation
-//           uploadedAt: new Date()
-//         };
-//       } catch (uploadError) {
-//         console.error("Cloudinary upload error:", uploadError);
-//         throw new Error(`Failed to upload file: ${uploadError.message}`);
-//       }
-//     };
-
-//     // 1️⃣ Profile photo upload (single)
-//     if (req.files?.profilePhoto?.[0]) {
-//       try {
-//         const photoData = await uploadToCloudinary(req.files.profilePhoto[0]);
-//         user.profilePhoto = {
-//           url: photoData.url,
-//           isVerified: false,
-//           uploadedAt: photoData.uploadedAt
-//         };
-//       } catch (error) {
-//         console.error("Profile photo upload failed:", error);
-//         // Continue with other updates even if photo upload fails
-//       }
-//     }
-
-//     // 2️⃣ Gallery photos upload (multiple)
-//     if (req.files?.galleryPhotos?.length) {
-//       try {
-//         const galleryUploads = await Promise.all(
-//           req.files.galleryPhotos.map((file) => uploadToCloudinary(file))
-//         );
-
-//         // Initialize gallery array if it doesn't exist
-//         if (!user.gallery) {
-//           user.gallery = [];
-//         }
-
-//         // Add new gallery photos with proper structure
-//         galleryUploads.forEach((photoData, index) => {
-//           user.gallery.push({
-//             url: photoData.url,
-//             isApproved: false,
-//             isPrimary: false,
-//             uploadedAt: photoData.uploadedAt,
-//             sortOrder: user.gallery.length + index
-//           });
-//         });
-//       } catch (error) {
-//         console.error("Gallery photos upload failed:", error);
-//       }
-//     }
-
-//     // 3️⃣ Verification documents upload
-//     if (req.files?.documents?.length) {
-//       try {
-//         const docUploads = await Promise.all(
-//           req.files.documents.map((file) => uploadToCloudinary(file))
-//         );
-
-//         // Initialize verificationDocuments array if it doesn't exist
-//         if (!user.verification?.verificationDocuments) {
-//           if (!user.verification) user.verification = {};
-//           user.verification.verificationDocuments = [];
-//         }
-
-//         // Add document info (you might want to get document type from request body)
-//         docUploads.forEach((docData) => {
-//           user.verification.verificationDocuments.push({
-//             type: 'aadhaar', // This should come from req.body or filename
-//             url: docData.url,
-//             verified: false,
-//             uploadedAt: docData.uploadedAt
-//           });
-//         });
-//       } catch (error) {
-//         console.error("Document upload failed:", error);
-//       }
-//     }
-
-//     // Validate before saving
-//     try {
-//       await user.validate();
-//     } catch (validationError) {
-//       console.error("Validation error before save:", validationError);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Validation failed",
-//         errors: Object.values(validationError.errors).map(err => err.message)
-//       });
-//     }
-
-//     await user.save();
-
-//     // Get updated user without sensitive fields
-//     const updatedUser = await User.findById(userId)
-//       .select('-password -__v -verification.verificationDocuments -location.current.fullAddress')
-//       .lean();
-
-//     // Add virtual fields
-//     updatedUser.age = user.age;
-//     updatedUser.fullName = user.fullName;
-
-//     res.status(200).json({
-//       success: true,
-//       message: `Profile updated successfully. Completion: ${user.profileCompletion}%`,
-//       data: { 
-//         user: updatedUser,
-//         profileCompletion: user.profileCompletion,
-//         isProfileComplete: user.profileCompletion >= 70 // You can adjust this threshold
-//       },
-//     });
-
-//   } catch (error) {
-//     console.error("Update Profile Error:", error);
-
-//     if (error.name === "ValidationError") {
-//       const errors = Object.values(error.errors).map(err => err.message);
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "Validation failed during save.", 
-//         errors 
-//       });
-//     }
-
-//     if (error.name === "CastError") {
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "Invalid user ID format." 
-//       });
-//     }
-
-//     if (error.code === 11000) {
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "Email already exists." 
-//       });
-//     }
-
-//     res.status(500).json({ 
-//       success: false, 
-//       message: "Internal server error during profile update.",
-//       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-//     });
-//   }
-// };
-
-
-// export const updateUserProfile = async (req, res) => {
-//   try {
-
-
-//       //  console.log("this is updated values",req.body.id);
-//     const userId = req.body.id;
-//     console.log("UserID:", userId);
-
-//     if (!userId) {
-//       return res.status(401).json({ 
-//         success: false, 
-//         message: "Unauthorized: No user ID found from token." 
-//       });
-//     }
-
-//     const updates = req.body;
-
-//     // Parse updates if they're sent as JSON string
-//     if (typeof updates === 'string') {
-//       try {
-//         updates = JSON.parse(updates);
-//       } catch (parseError) {
-//         return res.status(400).json({ 
-//           success: false, 
-//           message: "Invalid JSON in request body." 
-//         });
-//       }
-//     }
-
-//     if (!updates || Object.keys(updates).length === 0) {
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "No data provided for update." 
-//       });
-//     }
-
-//     const user = await User.findById(userId);
-//     if (!user) {
-//       return res.status(404).json({ 
-//         success: false, 
-//         message: "User not found." 
-//       });
-//     }
-
-//     const deepMerge = (target, source) => {
-//       for (const key in source) {
-//         // Skip prototype properties
-//         if (!source.hasOwnProperty(key)) continue;
-
-//         if (Array.isArray(source[key])) {
-//           target[key] = source[key];
-//         } else if (source[key] && typeof source[key] === "object" && !Array.isArray(source[key])) {
-//           if (!target[key] || typeof target[key] !== 'object') {
-//             target[key] = {};
-//           }
-//           deepMerge(target[key], source[key]);
-//         } else {
-//           target[key] = source[key];
-//         }
-//       }
-//       return target;
-//     };
-
-//     // Apply updates safely
-//     deepMerge(user, updates);
-
-//     const calculateProgress = (u) => {
-//       const completionFields = [
-//         u.personalInfo?.firstName, 
-//         u.personalInfo?.lastName, 
-//         u.personalInfo?.gender, 
-//         u.personalInfo?.dateOfBirth,
-//         u.religiousInfo?.religion, 
-//         u.religiousInfo?.motherTongue,
-//         u.professionalInfo?.occupation,
-//         u.familyInfo?.familyType,
-//         u.lifestyleInfo?.diet,
-//         u.aboutMe?.description,
-//         u.partnerPreferences?.ageRange?.min,
-//       ];
-
-//       const filledCount = completionFields.filter(val =>
-//         val !== undefined && 
-//         val !== null && 
-//         val !== '' && 
-//         !(Array.isArray(val) && val.length === 0)
-//       ).length;
-
-//       return Math.min(Math.round((filledCount / completionFields.length) * 100), 100);
-//     };
-
-//     user.profileCompletion = calculateProgress(user);
-//     user.isProfileComplete = user.profileCompletion >= 80;
-
-//     // Cloudinary upload helper
-//     const uploadToCloudinary = async (file) => {
-//       try {
-//         const result = await cloudinary.uploader.upload(file.path, {
-//           folder: "user_uploads",
-//           resource_type: "auto",
-//         });
-
-//         // Safely delete file if it exists
-//         if (fs.existsSync(file.path)) {
-//           await fs.promises.unlink(file.path).catch(console.error);
-//         }
-
-//         return result.secure_url;
-//       } catch (uploadError) {
-//         console.error("Cloudinary upload error:", uploadError);
-//         // Don't delete file if upload failed for debugging
-//         throw new Error(`Failed to upload file: ${uploadError.message}`);
-//       }
-//     };
-
-//     // 1️⃣ Single profile photo upload
-//     if (req.files?.photo?.[0]) {
-//       try {
-//         const photoUrl = await uploadToCloudinary(req.files.photo[0]);
-//         user.photoUrl = photoUrl;
-//       } catch (error) {
-//         console.error("Profile photo upload failed:", error);
-//         // Continue with other updates even if photo upload fails
-//       }
-//     }
-
-//     // 2️⃣ Multiple photo uploads (gallery / post images)
-//     if (req.files?.multiplePhotos?.length) {
-//       try {
-//         const photoUploads = await Promise.all(
-//           req.files.multiplePhotos.map((file) => uploadToCloudinary(file))
-//         );
-
-//         // Initialize multiplePhotos array if it doesn't exist
-//         if (!user.multiplePhotos) {
-//           user.multiplePhotos = [];
-//         }
-
-//         user.multiplePhotos.push(...photoUploads);
-//       } catch (error) {
-//         console.error("Multiple photos upload failed:", error);
-//         // Continue with other updates even if multiple photos upload fails
-//       }
-//     }
-
-//     // Validate before saving
-//     try {
-//       await user.validate();
-//     } catch (validationError) {
-//       console.error("Validation error before save:", validationError);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Validation failed",
-//         errors: Object.values(validationError.errors).map(err => err.message)
-//       });
-//     }
-
-//     await user.save();
-
-//     const updatedUser = await User.findById(userId).select('-password -__v');
-
-//     res.status(200).json({
-//       success: true,
-//       message: `Profile updated successfully. Completion: ${updatedUser.profileCompletion}%`,
-//       data: { user: updatedUser },
-//     });
-
-//   } catch (error) {
-//     console.error("Update Profile Error:", error);
-
-//     if (error.name === "ValidationError") {
-//       const errors = Object.values(error.errors).map(err => err.message);
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "Validation failed during save.", 
-//         errors 
-//       });
-//     }
-
-//     if (error.name === "CastError") {
-//       return res.status(400).json({ 
-//         success: false, 
-//         message: "Invalid user ID format." 
-//       });
-//     }
-
-//     res.status(500).json({ 
-//       success: false, 
-//       message: "Internal server error during profile update.",
-//       error: process.env.NODE_ENV === 'development' ? error.message : undefined
-//     });
-//   }
-// };
-
-// ======================================
-// 🔐 LOGIN CONTROLLER
-// ======================================
 export const Login = async (req, res) => {
   try {
     let { email, password } = req.body;
@@ -726,6 +234,18 @@ export const Login = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid email or password" });
     }
 
+    // ✅ FIX: Update isActive to true in database
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      { 
+        isActive: true,
+        lastLogin: new Date() // Optional: also update last login time
+      },
+      { new: true } // Return the updated document
+    );
+
+    console.log(`✅ User ${user._id} isActive set to: ${updatedUser.isActive}`);
+
     // Generate JWT token using the utility function
     const token = genToken(user._id, user.email, "10d");
 
@@ -743,11 +263,12 @@ export const Login = async (req, res) => {
       id: user._id,
       name: `${user.personalInfo?.firstName || ""} ${user.personalInfo?.lastName || ""}`.trim(),
       email: user.email,
+      isActive: updatedUser.isActive, // ✅ Use the updated value from database
       gender: user.personalInfo?.gender || "unknown",
       subscription: user.subscription?.plan || "free",
     };
 
-    console.log("✅ LOGIN SUCCESS:", userData.email);
+    console.log("✅ LOGIN SUCCESS:", userData.email, "isActive:", userData.isActive);
 
     res.status(200).json({
       success: true,
@@ -906,18 +427,110 @@ export const GetUser = async (req, res) => {
 };
 
 // ===================== User Logout =====================
+
+
+
 export const UserLogout = async (req, res) => {
   try {
+    const token = req.cookies.token;
+
+    console.log("🍪 Token from cookies:", token ? "Present" : "Missing");
+
+    if (!token) {
+      console.log("❌ No token found in cookies");
+      return res.status(400).json({ success: false, message: "No token found" });
+    }
+
+    // Decode token to get user ID with better error handling
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      console.log("🔓 Decoded token:", decoded);
+    } catch (jwtError) {
+      console.error("❌ JWT verification failed:", jwtError.message);
+      // Clear invalid token anyway
+      res.clearCookie("token");
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid token" 
+      });
+    }
+
+    // Check if decoded token has the expected structure
+    if (!decoded) {
+      console.log("❌ Token decoded to null/undefined");
+      res.clearCookie("token");
+      return res.status(401).json({ 
+        success: false, 
+        message: "Invalid token structure" 
+      });
+    }
+
+    // Get user ID - try different possible properties
+    const userId = decoded.id || decoded._id || decoded.userId || decoded.userID;
+    
+    console.log(`👤 Extracted user ID: ${userId} from decoded:`, decoded);
+
+    if (!userId) {
+      console.log("❌ No user ID found in token");
+      console.log("🔍 Available properties in decoded token:", Object.keys(decoded));
+      res.clearCookie("token");
+      return res.status(401).json({ 
+        success: false, 
+        message: "User ID not found in token" 
+      });
+    }
+
+    // Set isActive to false in database
+    const updatedUser = await User.findByIdAndUpdate(
+      userId, 
+      { 
+        isActive: false,
+        lastActive: new Date()
+      },
+      { new: true }
+    );
+
+    // Check if user was found and updated
+    if (!updatedUser) {
+      console.log(`❌ User not found with ID: ${userId}`);
+      res.clearCookie("token");
+      return res.status(404).json({ 
+        success: false, 
+        message: "User not found" 
+      });
+    }
+
+    console.log(`✅ User ${userId} isActive set to: ${updatedUser.isActive}`);
+
+    // Clear cookie
     res.clearCookie("token", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: process.env.NODE_ENV === "production" ? "None" : "Strict",
     });
 
-    return res.status(200).json({ success: true, message: "Logout successful" });
+    console.log("🍪 Cookie cleared successfully");
+
+    return res.status(200).json({ 
+      success: true, 
+      message: "Logout successful",
+      userUpdated: {
+        id: userId,
+        isActive: updatedUser.isActive
+      }
+    });
+
   } catch (error) {
-    console.error("Logout Error:", error);
-    return res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("💥 Logout Error:", error);
+    
+    // Clear cookie even on error
+    res.clearCookie("token");
+    
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error" 
+    });
   }
 };
 
@@ -942,227 +555,6 @@ export const GetAllUser = async (req, res) => {
 
 
 
-
-
-
-
-// export const uploadProfileImage = async (req, res) => {
-//   try {
-//     console.log("📥 Upload profile image request received");
-//     console.log("File:", req.file);
-
-//     const userId = req.body.userId || req.user?._id;
-//     console.log("User ID:", userId);
-
-//     if (!userId) return res.status(400).json({ success: false, message: "Missing user ID" });
-//     if (!req.file) return res.status(400).json({ success: false, message: "No file uploaded" });
-
-//     // Upload to Cloudinary
-//     const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-//       folder: "matrimony/profiles",
-//       public_id: `profile_${userId}_${Date.now()}`,
-//       transformation: [
-//         { width: 500, height: 500, crop: "fill", gravity: "face" },
-//         { quality: "auto:good" },
-//         { format: "jpg" },
-//       ],
-//     });
-
-//     console.log("✅ Cloudinary upload complete:", uploadResult.secure_url);
-
-//     // Delete local file
-//     await fs.unlink(req.file.path);
-//     console.log("🗑️ Local file deleted");
-
-//     // Update DB (use findOneAndUpdate for reliability)
-//     const updatedUser = await User.findOneAndUpdate(
-//       { _id: new mongoose.Types.ObjectId(userId) },
-//       {
-//         $set: {
-//           profilePhoto: uploadResult.secure_url,
-//           "personalInfo.profileImage": uploadResult.secure_url,
-//         },
-//       },
-//       { new: true }
-//     );
-
-//     if (!updatedUser) {
-//       console.log("❌ User not found in DB");
-//       return res.status(404).json({ success: false, message: "User not found" });
-//     }
-
-//     console.log("✅ User updated in DB:", updatedUser._id);
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Profile image uploaded successfully",
-//       imageUrl: uploadResult.secure_url,
-//       user: updatedUser,
-//     });
-//   } catch (error) {
-//     console.error("❌ Upload error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to upload profile image",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
-
-
-// export const uploadProfileImage = async (req, res) => {
-//   try {
-//     console.log("📥 Upload profile image request received");
-//     console.log("File:", req.file);
-//     console.log("User ID:", req.body.userId || req.user?._id);
-
-//     if (!req.file) {
-//       return res.status(400).json({ success: false, message: "No image file provided" });
-//     }
-
-//     const userId = req.body.userId || req.user?._id;
-//     if (!userId) {
-//       return res.status(400).json({ success: false, message: "User ID is required" });
-//     }
-
-//     // Read file from disk (since using diskStorage)
-//     const fileData = await fs.readFile(req.file.path);
-//     const base64Image = `data:${req.file.mimetype};base64,${fileData.toString('base64')}`;
-
-//     // Upload to Cloudinary
-//     const uploadResult = await cloudinary.uploader.upload(base64Image, {
-//       folder: 'matrimony/profiles',
-//       public_id: `profile_${userId}_${Date.now()}`,
-//       transformation: [
-//         { width: 500, height: 500, crop: 'fill', gravity: 'face' },
-//         { quality: 'auto:good' },
-//         { format: 'jpg' }
-//       ]
-//     });
-
-//     console.log("✅ Cloudinary upload complete:", uploadResult.secure_url);
-
-//     // Update user in MongoDB
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         $set: {
-//           profilePhoto: uploadResult.secure_url,  // ✅ Correct key
-//           updatedAt: new Date()
-//         }
-//       },
-//       { new: true, runValidators: true }
-//     ).select("-password");
-
-//     if (!updatedUser) {
-//       return res.status(404).json({ success: false, message: "User not found" });
-//     }
-
-//     // Delete local file AFTER Cloudinary upload
-//     await fs.unlink(req.file.path);
-//     console.log("🗑️ Local file deleted");
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Profile image uploaded successfully",
-//       imageUrl: uploadResult.secure_url,
-//       user: updatedUser
-//     });
-//   } catch (error) {
-//     console.error("❌ Upload error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to upload profile image",
-//       error: error.message
-//     });
-//   }
-// };
-
-
-
-
-// export const uploadProfileImage = async (req, res) => {
-//   try {
-//     console.log("📥 Upload profile image request received");
-//     console.log("File:", req.file);
-//     console.log("User ID:", req.body.userId || req.user?.id);
-
-//     const userId = req.body.userId || req.user?.id;
-//     if (!userId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'User ID is required'
-//       });
-//     }
-
-//     if (!req.file) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'No image file provided'
-//       });
-//     }
-
-//     // Upload to Cloudinary from file path
-//     const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-//       folder: 'matrimony/profiles',
-//       public_id: `profile_${userId}_${Date.now()}`,
-//       transformation: [
-//         { width: 500, height: 500, crop: 'fill', gravity: 'face' },
-//         { quality: 'auto:good' },
-//         { format: 'jpg' }
-//       ]
-//     });
-
-//     // Delete the local file after upload
-//     fs.unlink(req.file.path, (err) => {
-//       if (err) console.error("⚠️ Failed to delete local file:", err);
-//       else console.log("🗑️ Local file deleted");
-//     });
-
-//     // Update user in database
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         $set: {
-//           profileImage: uploadResult.secure_url,
-//           profilePhoto: uploadResult.secure_url,
-//           'personalInfo.profileImage': uploadResult.secure_url,
-//           updatedAt: new Date()
-//         }
-//       },
-//       { new: true, runValidators: true }
-//     ).select('-password');
-
-//     if (!updatedUser) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'User not found'
-//       });
-//     }
-
-//     console.log("✅ User profile updated in database");
-
-//     res.status(200).json({
-//       success: true,
-//       message: 'Profile image uploaded successfully',
-//       imageUrl: uploadResult.secure_url,
-//       user: updatedUser
-//     });
-
-//   } catch (error) {
-//     console.error('❌ Upload error:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Failed to upload profile image',
-//       error: error.message
-//     });
-//   }
-// };
-
-
-// Delete profile image
 export const deleteProfileImage = async (req, res) => {
   try {
     const userId = req.body.userId || req.user?.id;
@@ -1228,22 +620,22 @@ export const uploadProfileImage = async (req, res) => {
 
     if (!userId) {
       console.log("❌ Missing user ID");
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing user ID" 
+      return res.status(400).json({
+        success: false,
+        message: "Missing user ID"
       });
     }
-    
+
     if (!req.file) {
       console.log("❌ No file uploaded");
-      return res.status(400).json({ 
-        success: false, 
-        message: "No file uploaded" 
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
       });
     }
 
     console.log("☁️ Uploading to Cloudinary...");
-    
+
     // Upload to Cloudinary
     const uploadResult = await cloudinary.uploader.upload(req.file.path, {
       folder: "matrimony/profiles",
@@ -1277,17 +669,17 @@ export const uploadProfileImage = async (req, res) => {
           updatedAt: new Date()
         },
       },
-      { 
+      {
         new: true,
-        runValidators: true 
+        runValidators: true
       }
     ).select('-password');
 
     if (!updatedUser) {
       console.log("❌ User not found in DB");
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
       });
     }
 
@@ -1307,7 +699,7 @@ export const uploadProfileImage = async (req, res) => {
   } catch (error) {
     console.error("❌ UPLOAD ERROR:", error);
     console.error("❌ Error stack:", error.stack);
-    
+
     // Clean up file on error
     if (req.file && fs.existsSync(req.file.path)) {
       try {
@@ -1321,6 +713,44 @@ export const uploadProfileImage = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to upload profile image",
+      error: error.message,
+    });
+  }
+};
+
+
+export const checkStatusOnline = async (req, res) => {
+  try {
+    const { id } = req.params; // get user ID from URL
+
+     console.log("this is the userid" , id)
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    // Find the user without updating anything
+    const user = await User.findById(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "User status retrieved successfully",
+      isActive: user.isActive, // just return the status
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get status.",
       error: error.message,
     });
   }
