@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import {
+  checkStatusOnline,
   deleteProfileImage,
   GetAllUser,
   GetUser,
@@ -59,6 +60,10 @@ Userrouter.get('/:id', getUserById);
 Userrouter.get('/me', isAuth, GetUser);
 Userrouter.put('/update', isAuth, updateUserProfile);
 Userrouter.post('/logout', isAuth, UserLogout);
+
+// check user is online or not 
+
+Userrouter.get("/active/:id", checkStatusOnline);
 
 
 
