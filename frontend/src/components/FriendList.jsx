@@ -223,7 +223,7 @@ const FriendsList = () => {
             <h3 className="text-xl text-gray-400 mb-2">No friends yet</h3>
             <p className="text-gray-500 mb-6">Start connecting with people to build your friends list</p>
             <Link
-              to="/discovery"
+              to="/discover"
               className="bg-linear-to-rfrom-pink-500 to-purple-600 text-white py-3 px-6 rounded-xl font-semibold hover:from-pink-600 hover:to-purple-700 transition-all inline-block"
             >
               Discover People
