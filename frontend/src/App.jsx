@@ -16,6 +16,11 @@ import User_induvisual from './components/User_induvisual';
 import IncomingRequests from './components/IncomingRequests';
 import ChatsList from './components/ChatList';
 import Doc from './components/Doc';
+import NotFound from './components/NotFound';
+import ReelList from './components/ReelList';
+import UploadReels from './components/UploadReels';
+import Gallery from './components/Gallery';
+import Feed from './components/Feed';
 
 function App() {
   const [users, setUsers] = useState([]);
@@ -53,6 +58,18 @@ function App() {
           <Route path='/getnotification' element={<IncomingRequests />} />
           <Route path='/Doc' element={<Doc />} />
           <Route path='/messages' element={<ChatsList />} />
+          <Route path='/reellist' element={<ReelList/>} />
+          <Route path='/uploadReel' element={<UploadReels/>} />
+           <Route path='/gallery' element={<Gallery/>}/>
+             <Route path='/feed' element={<Feed/>}/>
+          <Route path='*' element={
+            <div className="flex justify-center items-center  bg-white-900">
+              <NotFound />
+            </div>
+          } />
+
+         
+
         </Routes>
       </div>
     </Router>
