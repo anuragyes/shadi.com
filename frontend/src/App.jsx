@@ -11,12 +11,10 @@ import FriendList from './components/FriendList';
 import ChatInterface from './components/Chat';
 import Settings from './components/Setting';
 import Testimonial from './components/Testimonial';
-import Testimonials from './components/Testimonial';
 import User_induvisual from './components/User_induvisual';
 import IncomingRequests from './components/IncomingRequests';
 import ChatsList from './components/ChatList';
 import Doc from './components/Doc';
-import NotFound from './components/NotFound';
 import ReelList from './components/ReelList';
 import UploadReels from './components/UploadReels';
 import Gallery from './components/Gallery';
@@ -62,11 +60,7 @@ function App() {
           <Route path='/uploadReel' element={<UploadReels/>} />
            <Route path='/gallery' element={<Gallery/>}/>
              <Route path='/feed' element={<Feed/>}/>
-          <Route path='*' element={
-            <div className="flex justify-center items-center  bg-white-900">
-              <NotFound />
-            </div>
-          } />
+         
 
          
 
