@@ -26,7 +26,7 @@ const Feed = () => {
 
   // Create axios instance with correct base URL
   const api = axios.create({
-    baseURL: 'http://localhost:5000', // Your backend URL
+    baseURL: 'https://shadii-com.onrender.com', // Your backend URL
     timeout: 10000,
     withCredentials: true
   });
@@ -511,5 +511,6 @@ const Feed = () => {
     </div>
   );
 };
+
 
 export default Feed;
