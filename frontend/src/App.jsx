@@ -11,6 +11,7 @@ import FriendList from './components/FriendList';
 import ChatInterface from './components/Chat';
 import Settings from './components/Setting';
 import Testimonial from './components/Testimonial';
+import Testimonials from './components/Testimonial';
 import User_induvisual from './components/User_induvisual';
 import IncomingRequests from './components/IncomingRequests';
 import ChatsList from './components/ChatList';
