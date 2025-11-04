@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { AuthContext }  from "../Context/Authcontext.js"
+import { AuthContext } from "../Context/Authcontext.js"
 import toast from "react-hot-toast";
+
 import {
   Heart,
   Search,
+  Film,
   MessageCircle,
   Bell,
   User,
@@ -13,8 +15,11 @@ import {
   LogOut,
   Settings,
   Star,
-  Home
+  Home,
+  Images,
+  CircleFadingArrowUp
 } from "lucide-react";
+
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -28,7 +33,7 @@ const Navbar = () => {
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   const userName = currentuser?.personalInfo?.firstName || "";
-    console.log(currentuser)
+  console.log(currentuser)
   const userInitial = userName.charAt(0).toUpperCase();
   const userEmail = currentuser?.email || "";
 
@@ -87,6 +92,34 @@ const Navbar = () => {
         <Settings className="h-4 w-4" />
         <span>Settings</span>
       </button>
+
+
+       <button
+        onClick={() => navigate("/feed")}
+        className="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-purple-500/20 hover:text-purple-400 w-full text-left rounded-lg transition-all"
+      >
+        <Film className="h-4 w-4" />
+        <span>Go To Reels</span>
+      </button>
+
+      <button
+        onClick={() => navigate("/uploadReel")}
+        className="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-pink-500/20 hover:text-pink-400 w-full text-left rounded-lg transition-all"
+      >
+        <CircleFadingArrowUp className="h-4 w-4" />
+        <span>Upload img/videos</span>
+      </button>
+      <button
+        onClick={() => navigate("/gallery")}
+        className="flex items-center space-x-3 px-4 py-3 text-gray-300 hover:bg-pink-500/20 hover:text-pink-400 w-full text-left rounded-lg transition-all"
+      >
+        <Images className="h-4 w-4" />
+        <span>My Gallery</span>
+      </button>
+
+
+
+
       <hr className="border-gray-700" />
       <button
         onClick={handleLogout}
@@ -123,9 +156,8 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`sticky top-0 z-50 transition-all duration-500 ${
-        isScrolled ? "bg-gray-900/95 shadow-2xl shadow-purple-900/20" : "bg-gray-900/90 shadow-lg shadow-purple-900/10"
-      } backdrop-blur-2xl border-b border-gray-700`}
+      className={`sticky top-0 z-50 transition-all duration-500 ${isScrolled ? "bg-gray-900/95 shadow-2xl shadow-purple-900/20" : "bg-gray-900/90 shadow-lg shadow-purple-900/10"
+        } backdrop-blur-2xl border-b border-gray-700`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -150,11 +182,10 @@ const Navbar = () => {
                 <button
                   key={item.to}
                   onClick={() => navigate(item.to)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-300 ${
-                    active
-                      ? "bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400"
-                      : "text-gray-400 hover:text-white hover:bg-gray-800/50"
-                  }`}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all duration-300 ${active
+                    ? "bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400"
+                    : "text-gray-400 hover:text-white hover:bg-gray-800/50"
+                    }`}
                 >
                   <item.icon className={`h-4 w-4 ${active ? "scale-110" : "group-hover:scale-110"}`} />
                   <span>{item.label}</span>
@@ -192,12 +223,15 @@ const Navbar = () => {
                     onClick={() => setIsProfileOpen(!isProfileOpen)}
                     className="flex items-center space-x-2 p-1 rounded-lg hover:bg-gray-800/60 border border-transparent hover:border-gray-600 transition-all"
                   >
-                    <div className="w-9 h-9 bg-gradient-to-r from-pink-500 via-purple-500 to-indigo-500 rounded-full flex items-center justify-center">
-                      <span className="text-white font-bold">{userInitial}</span>
-                    </div>
+
+                    <div>  <User className="w-8 h-8 bg-linear-to-r bg-gray-300 rounded-full flex items-center justify-center" /> <span className="text-white font-bold">{userInitial}</span></div>
+
+
                     <span className="hidden lg:block text-gray-300 font-medium truncate max-w-32">{userName}</span>
                   </button>
                   {isProfileOpen && <ProfileDropdown />}
+
+
                 </div>
               </>
             ) : (
@@ -231,11 +265,11 @@ const Navbar = () => {
         {isMenuOpen && (
           <>
             {/* Background Overlay - FIXED: Lower z-index and proper positioning */}
-            <div 
+            <div
               className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
               onClick={() => setIsMenuOpen(false)}
             />
-            
+
             {/* Mobile Menu Content - FIXED: Higher z-index and proper positioning */}
             <div className="md:hidden bg-gray-800/95 backdrop-blur-xl border-t border-gray-700 animate-slideDown absolute left-0 right-0 top-16 z-50">
               <div className="flex flex-col space-y-1 p-2">
@@ -248,11 +282,10 @@ const Navbar = () => {
                         navigate(item.to);
                         setIsMenuOpen(false);
                       }}
-                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
-                        active
-                          ? "bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400"
-                          : "text-gray-300 hover:text-white hover:bg-gray-700/50"
-                      }`}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${active
+                        ? "bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-400"
+                        : "text-gray-300 hover:text-white hover:bg-gray-700/50"
+                        }`}
                     >
                       <item.icon className="h-4 w-4" />
                       <span className="font-medium">{item.label}</span>
@@ -332,9 +365,9 @@ const Navbar = () => {
 
       {/* Profile Dropdown Overlay */}
       {isProfileOpen && (
-        <div 
-          className="fixed inset-0 z-40" 
-          onClick={() => setIsProfileOpen(false)} 
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setIsProfileOpen(false)}
         />
       )}
     </nav>
