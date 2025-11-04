@@ -26,7 +26,7 @@ const UploadReels = () => {
   const fileInputRef = useRef(null);
 
   const { currentuser } = useContext(AuthContext);
-  const API_BASE_URL = 'http://localhost:5000';
+  const API_BASE_URL = 'https://shadii-com.onrender.com';
 
   const userId = currentuser?.id || currentuser?._id;
 
@@ -476,5 +476,6 @@ const UploadReels = () => {
     </div>
   );
 };
+
 
 export default UploadReels;
