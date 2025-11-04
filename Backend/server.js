@@ -10,6 +10,7 @@ import cookieParser from "cookie-parser";
 import Userrouter from "./Routes/UserRoutes.js";
 import connectionDb from "./config/db.js";
 import ChatRoutes from "./Routes/chatRoutes.js";
+import ReelRouter from "./Routes/ReelRoutes.js";
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use(cookieParser());
 // Routes
 app.use("/api/user", Userrouter);
 app.use("/api/user/request", ChatRoutes);
+app.use("/api/reel", ReelRouter);
 
 // ✅ --- SOCKET.IO LOGIC ---
 const onlineUsers = new Map(); // userId => socket.id
