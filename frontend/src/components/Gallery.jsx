@@ -42,7 +42,7 @@ const Gallery = () => {
     totalLikes: 0,
     totalViews: 0
   });
-  const BASE_URL = 'http://localhost:5000';
+  const BASE_URL = 'https://shadii-com.onrender.com';
 
   const { currentuser } = useContext(AuthContext);
 
@@ -658,5 +658,6 @@ const deleteMedia = async (mediaId) => {
     </div>
   );
 };
+
 
 export default Gallery;
