@@ -115,7 +115,7 @@ export const cancelChatRequestByUser = async (req, res) => {
     }
 
     // ✅ Set status to "none" instead of deleting
-    request.status = "rejected";
+    request.status = "none";
     request.updatedAt = new Date();
     await request.save();
 
