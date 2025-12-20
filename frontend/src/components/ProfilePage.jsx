@@ -1,6 +1,7 @@
 
 
-import React, { useState, useEffect, useContext } from 'react';
+
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios'
 import {
@@ -169,8 +170,6 @@ const ProfilePage = () => {
     loading: authLoading
   } = useContext(AuthContext);
 
-   
-
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personal');
   const [progress, setProgress] = useState(0);
@@ -179,8 +178,8 @@ const ProfilePage = () => {
   const [userData, setUserData] = useState(initialState);
   const [uploadingImage, setUploadingImage] = useState(false);
 
-
- console.log(currentuser)
+  console.log(currentuser);
+  
   // Helper function for deep merging user data
   const deepMergeUserData = (fetchedData) => {
     if (!fetchedData) return initialState;
@@ -389,99 +388,91 @@ const ProfilePage = () => {
   };
 
   // Profile image upload handler
-// Profile image upload handler - UPDATED WITH DEBUGGING
-const handleProfileImageUpload = async (file) => {
-  if (!file) return;
+  const handleProfileImageUpload = async (file) => {
+    if (!file) return;
 
-  const validImageTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
-  if (!validImageTypes.includes(file.type)) {
-    toast.error("Only JPEG, PNG, JPG, and WEBP formats are allowed.");
-    return;
-  }
-
-  if (file.size > 5 * 1024 * 1024) {
-    toast.error("File size must be under 5MB.");
-    return;
-  }
-
-  try {
-    setUploadingImage(true);
-
-    const formData = new FormData();
-    formData.append('image', file);
-    
-    // Get user ID and token for debugging
-    const userId = currentuser?._id;
-    const token = localStorage.getItem('token') || currentuser?.token;
-    
-    console.log("🔍 DEBUG UPLOAD INFO:");
-    console.log("📁 File:", file.name, file.size, file.type);
-    console.log("👤 User ID:", userId);
-    console.log("🔑 Token exists:", !!token);
-    console.log("🌐 Endpoint:", 'http://localhost:5000/api/user/upload-profile-image');
-
-    if (userId) formData.append('userId', userId);
-
-    console.log("📤 Uploading profile image...");
-
-    // Use fetch instead of axios for better debugging
-    const response = await fetch('http://localhost:5000/api/user/upload-profile-image', {
-      method: 'POST',
-      body: formData,
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        // Don't set Content-Type - let browser set it for FormData
-      },
-    });
-
-    console.log("📨 Response status:", response.status);
-    console.log("📨 Response headers:", Object.fromEntries(response.headers.entries()));
-
-    const result = await response.json();
-    console.log("📨 Upload result:", result);
-
-    if (!response.ok) {
-      throw new Error(result.message || `Upload failed with status: ${response.status}`);
+    const validImageTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+    if (!validImageTypes.includes(file.type)) {
+      toast.error("Only JPEG, PNG, JPG, and WEBP formats are allowed.");
+      return;
     }
 
-    if (result.success) {
-      console.log("✅ Upload successful, updating state...");
-      setUserData(prev => ({
-        ...prev,
-        profileImage: result.imageUrl,
-        profilePhoto: result.imageUrl,
-        personalInfo: {
-          ...prev.personalInfo,
-          profileImage: result.imageUrl
-        }
-      }));
-      
-      toast.success("Profile image uploaded successfully!");
-      
-      // Auto-save after a short delay
-      setTimeout(() => {
-        console.log("💾 Auto-saving profile...");
-        handleSave();
-      }, 1000);
-      
-    } else {
-      throw new Error(result.message || 'Upload failed - no success flag');
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5MB.");
+      return;
     }
-  } catch (error) {
-    console.error("❌ Profile image upload error:", error);
-    console.error("❌ Error details:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack
-    });
-    toast.error(`Failed to upload profile image: ${error.message}`);
-  } finally {
-    setUploadingImage(false);
-  }
-};
 
+    try {
+      setUploadingImage(true);
 
-  // // File input change handler
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const userId = currentuser?._id;
+      const token = localStorage.getItem('token') || currentuser?.token;
+
+      console.log("🔍 DEBUG UPLOAD INFO:");
+      console.log("📁 File:", file.name, file.size, file.type);
+      console.log("👤 User ID:", userId);
+      console.log("🔑 Token exists:", !!token);
+
+      if (userId) formData.append('userId', userId);
+
+      console.log("📤 Uploading profile image...");
+
+      const response = await fetch('http://localhost:5000/api/user/upload-profile-image', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log("📨 Response status:", response.status);
+
+      const result = await response.json();
+      console.log("📨 Upload result:", result);
+
+      if (!response.ok) {
+        throw new Error(result.message || `Upload failed with status: ${response.status}`);
+      }
+
+      if (result.success) {
+        console.log("✅ Upload successful, updating state...");
+        setUserData(prev => ({
+          ...prev,
+          profileImage: result.imageUrl,
+          profilePhoto: result.imageUrl,
+          personalInfo: {
+            ...prev.personalInfo,
+            profileImage: result.imageUrl
+          }
+        }));
+
+        toast.success("Profile image uploaded successfully!");
+
+        setTimeout(() => {
+          console.log("💾 Auto-saving profile...");
+          handleSave();
+        }, 1000);
+
+      } else {
+        throw new Error(result.message || 'Upload failed - no success flag');
+      }
+    } catch (error) {
+      console.error("❌ Profile image upload error:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      toast.error(`Failed to upload profile image: ${error.message}`);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // File input change handler
   const handleFileChange = (e) => {
     const file = e.target.files[0];
 
@@ -489,11 +480,10 @@ const handleProfileImageUpload = async (file) => {
     if (file && isEditing) {
       handleProfileImageUpload(file);
     }
-    // Reset the input
     e.target.value = '';
   };
 
-    const handleSave = async () => {
+  const handleSave = async () => {
     try {
       setSaving(true);
 
@@ -505,7 +495,6 @@ const handleProfileImageUpload = async (file) => {
         toast.success("Profile updated successfully! ✅");
         setIsEditing(false);
 
-        // Refetch to ensure data is synced
         const userId = currentuser?._id || currentuser?.id;
         if (userId) {
           const freshData = await getUserByID(userId);
@@ -524,8 +513,6 @@ const handleProfileImageUpload = async (file) => {
       setSaving(false);
     }
   };
-
-
 
   // Calculate profile completion percentage
   const calculateProgress = () => {
@@ -560,8 +547,10 @@ const handleProfileImageUpload = async (file) => {
     setProgress(calculateProgress());
   }, [userData]);
 
-  // Input handlers with proper event handling
-  const handleInputChange = (section, field, value) => {
+  // ==================== FIXED HANDLER FUNCTIONS ====================
+  
+  // Direct handler functions to prevent recreating functions on every render
+  const handleInputChange = useCallback((section, field, value) => {
     setUserData(prev => ({
       ...prev,
       [section]: {
@@ -569,9 +558,9 @@ const handleProfileImageUpload = async (file) => {
         [field]: value
       }
     }));
-  };
+  }, []);
 
-  const handleNestedInputChange = (section, subSection, field, value) => {
+  const handleNestedInputChange = useCallback((section, subSection, field, value) => {
     setUserData(prev => ({
       ...prev,
       [section]: {
@@ -582,36 +571,40 @@ const handleProfileImageUpload = async (file) => {
         }
       }
     }));
-  };
+  }, []);
 
-  // Event handlers for different input types
-  const handleTextInput = (section, field) => (e) => {
-    handleInputChange(section, field, e.target.value);
-  };
+  // Helper functions for different input types
+  const createTextInputHandler = useCallback((section, field) => {
+    return (e) => handleInputChange(section, field, e.target.value);
+  }, [handleInputChange]);
 
-  const handleNestedTextInput = (section, subSection, field) => (e) => {
-    handleNestedInputChange(section, subSection, field, e.target.value);
-  };
+  const createSelectHandler = useCallback((section, field) => {
+    return (e) => handleInputChange(section, field, e.target.value);
+  }, [handleInputChange]);
 
-  const handleSelectChange = (section, field) => (e) => {
-    handleInputChange(section, field, e.target.value);
-  };
+  const createNumberInputHandler = useCallback((section, field) => {
+    return (e) => {
+      const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+      handleInputChange(section, field, isNaN(value) ? 0 : value);
+    };
+  }, [handleInputChange]);
 
-  const handleNestedSelectChange = (section, subSection, field) => (e) => {
-    handleNestedInputChange(section, subSection, field, e.target.value);
-  };
+  const createNestedTextInputHandler = useCallback((section, subSection, field) => {
+    return (e) => handleNestedInputChange(section, subSection, field, e.target.value);
+  }, [handleNestedInputChange]);
 
-  const handleNumberInput = (section, field) => (e) => {
-    const value = e.target.value === '' ? 0 : parseInt(e.target.value);
-    handleInputChange(section, field, value);
-  };
+  const createNestedSelectHandler = useCallback((section, subSection, field) => {
+    return (e) => handleNestedInputChange(section, subSection, field, e.target.value);
+  }, [handleNestedInputChange]);
 
-  const handleNestedNumberInput = (section, subSection, field) => (e) => {
-    const value = e.target.value === '' ? 0 : parseInt(e.target.value);
-    handleNestedInputChange(section, subSection, field, value);
-  };
+  const createNestedNumberInputHandler = useCallback((section, subSection, field) => {
+    return (e) => {
+      const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+      handleNestedInputChange(section, subSection, field, isNaN(value) ? 0 : value);
+    };
+  }, [handleNestedInputChange]);
 
-
+  // ==================== END OF FIXED HANDLERS ====================
 
   // Tabs configuration
   const tabs = [
@@ -626,7 +619,7 @@ const handleProfileImageUpload = async (file) => {
     { id: 'privacy', label: 'Privacy', icon: Shield, completed: true }
   ];
 
-  // Tab Components
+  // Tab Components - Updated with fixed handlers
   const PersonalTab = () => (
     <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700 backdrop-blur-sm">
       <h2 className="text-2xl font-bold mb-6 flex items-center">
@@ -639,7 +632,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.personalInfo?.firstName || ''}
-            onChange={handleTextInput('personalInfo', 'firstName')}
+            onChange={createTextInputHandler('personalInfo', 'firstName')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Enter first name"
@@ -651,7 +644,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.personalInfo?.lastName || ''}
-            onChange={handleTextInput('personalInfo', 'lastName')}
+            onChange={createTextInputHandler('personalInfo', 'lastName')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Enter last name"
@@ -662,7 +655,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Gender *</label>
           <select
             value={userData.personalInfo?.gender || ''}
-            onChange={handleSelectChange('personalInfo', 'gender')}
+            onChange={createSelectHandler('personalInfo', 'gender')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -680,7 +673,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="date"
               value={userData.personalInfo?.dateOfBirth?.split('T')[0] || ''}
-              onChange={handleTextInput('personalInfo', 'dateOfBirth')}
+              onChange={createTextInputHandler('personalInfo', 'dateOfBirth')}
               disabled={!isEditing}
               className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
@@ -691,7 +684,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Marital Status</label>
           <select
             value={userData.personalInfo?.maritalStatus || 'never_married'}
-            onChange={handleSelectChange('personalInfo', 'maritalStatus')}
+            onChange={createSelectHandler('personalInfo', 'maritalStatus')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -706,7 +699,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Physical Status</label>
           <select
             value={userData.personalInfo?.physicalStatus || 'normal'}
-            onChange={handleSelectChange('personalInfo', 'physicalStatus')}
+            onChange={createSelectHandler('personalInfo', 'physicalStatus')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -722,7 +715,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="number"
                 value={userData.personalInfo?.height?.value || 0}
-                onChange={handleNestedNumberInput('personalInfo', 'height', 'value')}
+                onChange={createNestedNumberInputHandler('personalInfo', 'height', 'value')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Height"
@@ -731,7 +724,7 @@ const handleProfileImageUpload = async (file) => {
             <div className="w-32">
               <select
                 value={userData.personalInfo?.height?.unit || 'cm'}
-                onChange={handleNestedSelectChange('personalInfo', 'height', 'unit')}
+                onChange={createNestedSelectHandler('personalInfo', 'height', 'unit')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               >
@@ -747,7 +740,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="number"
             value={userData.personalInfo?.weight || 0}
-            onChange={handleNumberInput('personalInfo', 'weight')}
+            onChange={createNumberInputHandler('personalInfo', 'weight')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Weight in kg"
@@ -758,7 +751,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Blood Group</label>
           <select
             value={userData.personalInfo?.bloodGroup || ''}
-            onChange={handleSelectChange('personalInfo', 'bloodGroup')}
+            onChange={createSelectHandler('personalInfo', 'bloodGroup')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -778,7 +771,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">About Me</label>
           <textarea
             value={userData.personalInfo?.aboutMe || ''}
-            onChange={handleTextInput('personalInfo', 'aboutMe')}
+            onChange={createTextInputHandler('personalInfo', 'aboutMe')}
             disabled={!isEditing}
             rows={4}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
@@ -800,7 +793,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Religion *</label>
           <select
             value={userData.religiousInfo?.religion || ''}
-            onChange={handleSelectChange('religiousInfo', 'religion')}
+            onChange={createSelectHandler('religiousInfo', 'religion')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -819,7 +812,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Mother Tongue *</label>
           <select
             value={userData.religiousInfo?.motherTongue || ''}
-            onChange={handleSelectChange('religiousInfo', 'motherTongue')}
+            onChange={createSelectHandler('religiousInfo', 'motherTongue')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -840,7 +833,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.religiousInfo?.caste || ''}
-            onChange={handleTextInput('religiousInfo', 'caste')}
+            onChange={createTextInputHandler('religiousInfo', 'caste')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Enter your caste"
@@ -852,7 +845,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.religiousInfo?.subCaste || ''}
-            onChange={handleTextInput('religiousInfo', 'subCaste')}
+            onChange={createTextInputHandler('religiousInfo', 'subCaste')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Enter your sub-caste"
@@ -874,7 +867,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.professionalInfo?.occupation || ''}
-            onChange={handleTextInput('professionalInfo', 'occupation')}
+            onChange={createTextInputHandler('professionalInfo', 'occupation')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Your occupation"
@@ -885,7 +878,7 @@ const handleProfileImageUpload = async (file) => {
           <input
             type="text"
             value={userData.professionalInfo?.jobTitle || ''}
-            onChange={handleTextInput('professionalInfo', 'jobTitle')}
+            onChange={createTextInputHandler('professionalInfo', 'jobTitle')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             placeholder="Your job title"
@@ -907,7 +900,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Family Type</label>
           <select
             value={userData.familyInfo?.familyType || 'nuclear'}
-            onChange={handleSelectChange('familyInfo', 'familyType')}
+            onChange={createSelectHandler('familyInfo', 'familyType')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -921,7 +914,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Family Status</label>
           <select
             value={userData.familyInfo?.familyStatus || 'middle'}
-            onChange={handleSelectChange('familyInfo', 'familyStatus')}
+            onChange={createSelectHandler('familyInfo', 'familyStatus')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -942,7 +935,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="text"
                 value={userData.familyInfo?.father?.occupation || ''}
-                onChange={handleNestedTextInput('familyInfo', 'father', 'occupation')}
+                onChange={createNestedTextInputHandler('familyInfo', 'father', 'occupation')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Father's occupation"
@@ -970,7 +963,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="text"
                 value={userData.familyInfo?.mother?.occupation || ''}
-                onChange={handleNestedTextInput('familyInfo', 'mother', 'occupation')}
+                onChange={createNestedTextInputHandler('familyInfo', 'mother', 'occupation')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Mother's occupation"
@@ -1001,7 +994,7 @@ const handleProfileImageUpload = async (file) => {
                   <input
                     type="number"
                     value={userData.familyInfo?.siblings?.brothers?.total || 0}
-                    onChange={handleNestedNumberInput('familyInfo', 'siblings', 'brothers.total')}
+                    onChange={createNestedNumberInputHandler('familyInfo', 'siblings', 'brothers.total')}
                     disabled={!isEditing}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -1011,7 +1004,7 @@ const handleProfileImageUpload = async (file) => {
                   <input
                     type="number"
                     value={userData.familyInfo?.siblings?.brothers?.married || 0}
-                    onChange={handleNestedNumberInput('familyInfo', 'siblings', 'brothers.married')}
+                    onChange={createNestedNumberInputHandler('familyInfo', 'siblings', 'brothers.married')}
                     disabled={!isEditing}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -1027,7 +1020,7 @@ const handleProfileImageUpload = async (file) => {
                   <input
                     type="number"
                     value={userData.familyInfo?.siblings?.sisters?.total || 0}
-                    onChange={handleNestedNumberInput('familyInfo', 'siblings', 'sisters.total')}
+                    onChange={createNestedNumberInputHandler('familyInfo', 'siblings', 'sisters.total')}
                     disabled={!isEditing}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -1037,7 +1030,7 @@ const handleProfileImageUpload = async (file) => {
                   <input
                     type="number"
                     value={userData.familyInfo?.siblings?.sisters?.married || 0}
-                    onChange={handleNestedNumberInput('familyInfo', 'siblings', 'sisters.married')}
+                    onChange={createNestedNumberInputHandler('familyInfo', 'siblings', 'sisters.married')}
                     disabled={!isEditing}
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
@@ -1056,7 +1049,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="text"
                 value={userData.familyInfo?.nativePlace?.city || ''}
-                onChange={handleNestedTextInput('familyInfo', 'nativePlace', 'city')}
+                onChange={createNestedTextInputHandler('familyInfo', 'nativePlace', 'city')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Native city"
@@ -1067,7 +1060,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="text"
                 value={userData.familyInfo?.nativePlace?.state || ''}
-                onChange={handleNestedTextInput('familyInfo', 'nativePlace', 'state')}
+                onChange={createNestedTextInputHandler('familyInfo', 'nativePlace', 'state')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Native state"
@@ -1078,7 +1071,7 @@ const handleProfileImageUpload = async (file) => {
               <input
                 type="text"
                 value={userData.familyInfo?.nativePlace?.country || ''}
-                onChange={handleNestedTextInput('familyInfo', 'nativePlace', 'country')}
+                onChange={createNestedTextInputHandler('familyInfo', 'nativePlace', 'country')}
                 disabled={!isEditing}
                 className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 placeholder="Native country"
@@ -1202,7 +1195,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Diet</label>
           <select
             value={userData.lifestyleInfo?.diet || 'vegetarian'}
-            onChange={handleSelectChange('lifestyleInfo', 'diet')}
+            onChange={createSelectHandler('lifestyleInfo', 'diet')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -1218,7 +1211,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Smoking</label>
           <select
             value={userData.lifestyleInfo?.smoking || 'non_smoker'}
-            onChange={handleSelectChange('lifestyleInfo', 'smoking')}
+            onChange={createSelectHandler('lifestyleInfo', 'smoking')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -1233,7 +1226,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Drinking</label>
           <select
             value={userData.lifestyleInfo?.drinking || 'non_drinker'}
-            onChange={handleSelectChange('lifestyleInfo', 'drinking')}
+            onChange={createSelectHandler('lifestyleInfo', 'drinking')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -1378,7 +1371,7 @@ const handleProfileImageUpload = async (file) => {
             <label className="block text-sm font-medium text-gray-300 mb-2">Country</label>
             <select
               value={userData.location?.current?.country || ''}
-              onChange={handleNestedSelectChange('location', 'current', 'country')}
+              onChange={createNestedSelectHandler('location', 'current', 'country')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
@@ -1398,7 +1391,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.current?.state || ''}
-              onChange={handleNestedTextInput('location', 'current', 'state')}
+              onChange={createNestedTextInputHandler('location', 'current', 'state')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="State"
@@ -1410,7 +1403,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.current?.city || ''}
-              onChange={handleNestedTextInput('location', 'current', 'city')}
+              onChange={createNestedTextInputHandler('location', 'current', 'city')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="City"
@@ -1422,7 +1415,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.current?.zipCode || ''}
-              onChange={handleNestedTextInput('location', 'current', 'zipCode')}
+              onChange={createNestedTextInputHandler('location', 'current', 'zipCode')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="ZIP Code"
@@ -1442,7 +1435,7 @@ const handleProfileImageUpload = async (file) => {
             <label className="block text-sm font-medium text-gray-300 mb-2">Country</label>
             <select
               value={userData.location?.permanent?.country || ''}
-              onChange={handleNestedSelectChange('location', 'permanent', 'country')}
+              onChange={createNestedSelectHandler('location', 'permanent', 'country')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             >
@@ -1462,7 +1455,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.permanent?.state || ''}
-              onChange={handleNestedTextInput('location', 'permanent', 'state')}
+              onChange={createNestedTextInputHandler('location', 'permanent', 'state')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="State"
@@ -1474,7 +1467,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.permanent?.city || ''}
-              onChange={handleNestedTextInput('location', 'permanent', 'city')}
+              onChange={createNestedTextInputHandler('location', 'permanent', 'city')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="City"
@@ -1486,7 +1479,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="text"
               value={userData.location?.permanent?.zipCode || ''}
-              onChange={handleNestedTextInput('location', 'permanent', 'zipCode')}
+              onChange={createNestedTextInputHandler('location', 'permanent', 'zipCode')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               placeholder="ZIP Code"
@@ -1501,7 +1494,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Citizenship</label>
           <select
             value={userData.location?.citizenship || 'Indian'}
-            onChange={handleSelectChange('location', 'citizenship')}
+            onChange={createSelectHandler('location', 'citizenship')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -1518,7 +1511,7 @@ const handleProfileImageUpload = async (file) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">Residency Status</label>
           <select
             value={userData.location?.residencyStatus || 'citizen'}
-            onChange={handleSelectChange('location', 'residencyStatus')}
+            onChange={createSelectHandler('location', 'residencyStatus')}
             disabled={!isEditing}
             className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >
@@ -1578,7 +1571,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="number"
               value={userData.partnerPreferences?.ageRange?.min || 0}
-              onChange={handleNestedNumberInput('partnerPreferences', 'ageRange', 'min')}
+              onChange={createNestedNumberInputHandler('partnerPreferences', 'ageRange', 'min')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               min="18"
@@ -1590,7 +1583,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="number"
               value={userData.partnerPreferences?.ageRange?.max || 0}
-              onChange={handleNestedNumberInput('partnerPreferences', 'ageRange', 'max')}
+              onChange={createNestedNumberInputHandler('partnerPreferences', 'ageRange', 'max')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               min="18"
@@ -1609,7 +1602,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="number"
               value={userData.partnerPreferences?.heightRange?.min || 0}
-              onChange={handleNestedNumberInput('partnerPreferences', 'heightRange', 'min')}
+              onChange={createNestedNumberInputHandler('partnerPreferences', 'heightRange', 'min')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               min="140"
@@ -1621,7 +1614,7 @@ const handleProfileImageUpload = async (file) => {
             <input
               type="number"
               value={userData.partnerPreferences?.heightRange?.max || 0}
-              onChange={handleNestedNumberInput('partnerPreferences', 'heightRange', 'max')}
+              onChange={createNestedNumberInputHandler('partnerPreferences', 'heightRange', 'max')}
               disabled={!isEditing}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white disabled:bg-gray-800 disabled:text-gray-400 transition-all focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               min="140"
@@ -2041,9 +2034,9 @@ const handleProfileImageUpload = async (file) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 text-white pt-16 font-inter">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+      <div className="max-w-7xl   mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Header Section */}
-        <div className="bg-gray-800/50 rounded-3xl p-8 mb-8 border border-gray-700 backdrop-blur-sm">
+        <div className="bg-gradient-to-br from-gray-900 via-purple-900 to-violet-900 rounded-3xl p-8 mb-8 border border-gray-700 backdrop-blur-sm">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between">
             <div className="flex items-center space-x-6 mb-6 lg:mb-0">
               <button
