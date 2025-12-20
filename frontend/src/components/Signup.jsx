@@ -6,7 +6,7 @@ import {
   MapPin, Heart, Sparkles, Shield, Users
 } from 'lucide-react';
 import toast from 'react-hot-toast';
- import { AuthContext } from '../Context/Authcontext.js'; // ✅ import context
+import { AuthContext } from '../Context/Authcontext.js'; // ✅ import context
 
 
 
@@ -98,31 +98,31 @@ const Signup = () => {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!validateStep(step)) return;
+    e.preventDefault();
+    if (!validateStep(step)) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const result = await signup(formData);
-    console.log("Signup result:", result);
+    try {
+      const result = await signup(formData);
+      console.log("Signup result:", result);
 
-    // ⚠️ FIX: Check result structure properly
-    if (result && result.success) {
-      toast.success(result.message || 'Signup successful!');
-      navigate('/discover');
-    } else {
-      const errorMessage = result?.message || 'Signup failed';
-      toast.error(errorMessage);
-      setErrors({ submit: errorMessage });
+      // ⚠️ FIX: Check result structure properly
+      if (result && result.success) {
+        toast.success(result.message || 'Signup successful!');
+        navigate('/');
+      } else {
+        const errorMessage = result?.message || 'Signup failed';
+        toast.error(errorMessage);
+        setErrors({ submit: errorMessage });
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Unexpected error during signup.');
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Signup error:', error);
-    toast.error(error.message || 'Unexpected error during signup.');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
   // Redirect if already logged in
   if (isLoggedIn) {
     navigate('/');
@@ -147,7 +147,7 @@ const Signup = () => {
       </div>
 
       <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-center relative z-10">
-        
+
         {/* Left Side - Branding (Responsive: Hidden on small screens) */}
         <div className="text-white space-y-8 hidden lg:block">
           <div className="space-y-4">
@@ -355,8 +355,7 @@ const Signup = () => {
                           key={genderOption}
                           type="button"
                           onClick={() => handleChange({ target: { name: 'gender', value: genderOption.toLowerCase() } })}
-                          className={`py-3 px-4 rounded-xl border transition-all ${
-                            formData.gender === genderOption.toLowerCase()
+                          className={`py-3 px-4 rounded-xl border transition-all ${formData.gender === genderOption.toLowerCase()
                               ? 'bg-gradient-to-r from-purple-500 to-pink-500 border-purple-500 text-white'
                               : 'bg-gray-700/50 border-gray-600 text-gray-300 hover:border-purple-400'
                             }`}
