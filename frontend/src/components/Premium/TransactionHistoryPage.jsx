@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 
 const TransactionHistoryPage = () => {
-    const BASE_URL = "http://localhost:5000"
+    const BASE_URL = "https://shadii-com.onrender.com"
 
     const currentUser = JSON.parse(localStorage.getItem("user"));
     const currentuserId = currentUser.id;
@@ -468,5 +468,6 @@ const TransactionHistoryPage = () => {
         </div>
     );
 };
+
 
 export default TransactionHistoryPage;
