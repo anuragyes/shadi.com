@@ -327,16 +327,14 @@ const FriendsList = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredFriends.map(friend => (
                 <div
                   key={friend.id}
                   onClick={() => {
-                    navigate(`/userprofile/${friend.id}`)
-                    console.log("👉 Friend clicked ID:", friend.id); // 🔴 NEW
-                    setSelectedFriendId(friend.id);
+                    navigate(`/userprofile/${friend.id}`);
+                    console.log("👉 Friend clicked ID:", friend.id);
                   }}
-
                   className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-white/20 transition-all group"
                 >
                   {/* Friend Header */}
@@ -348,11 +346,14 @@ const FriendsList = () => {
                           alt={friend.name}
                           className="w-14 h-14 rounded-2xl object-cover"
                           onError={(e) => {
-                            e.target.src = "https://placehold.co/150x150/333/fff?text=User";
+                            e.target.src =
+                              "https://placehold.co/150x150/333/fff?text=User";
                           }}
                         />
-                        <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${friend.isOnline ? 'bg-green-500' : 'bg-gray-500'
-                          }`} />
+                        <div
+                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 ${friend.isOnline ? "bg-green-500" : "bg-gray-500"
+                            }`}
+                        />
                       </div>
                       <div>
                         <h3 className="font-semibold text-white flex items-center space-x-2">
@@ -363,11 +364,18 @@ const FriendsList = () => {
                         </h3>
                         <div className="flex items-center space-x-1 text-sm text-gray-400">
                           <Clock className="h-3 w-3" />
-                          <span>{friend.isOnline ? 'Online now' : `Last seen ${friend.lastSeen}`}</span>
+                          <span>
+                            {friend.isOnline
+                              ? "Online now"
+                              : `Last seen ${friend.lastSeen}`}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-white/10 rounded-lg">
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-white/10 rounded-lg"
+                    >
                       <MoreVertical className="h-4 w-4 text-gray-400" />
                     </button>
                   </div>
@@ -388,19 +396,24 @@ const FriendsList = () => {
                     </div>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <Calendar className="h-4 w-4" />
-                      <span>Friends since {new Date(friend.friendshipDate).toLocaleDateString()}</span>
+                      <span>
+                        Friends since{" "}
+                        {new Date(friend.friendshipDate).toLocaleDateString()}
+                      </span>
                     </div>
                   </div>
-
-
 
                   {/* Last Message Preview */}
                   <div className="mb-4 p-3 bg-white/5 rounded-xl">
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-xs text-gray-400">Last message</span>
-                      <span className="text-xs text-gray-500">{friend.lastMessageTime}</span>
+                      <span className="text-xs text-gray-500">
+                        {friend.lastMessageTime}
+                      </span>
                     </div>
-                    <p className="text-sm text-gray-300 truncate">{friend.lastMessage}</p>
+                    <p className="text-sm text-gray-300 truncate">
+                      {friend.lastMessage}
+                    </p>
                     {friend.unreadMessages > 0 && (
                       <div className="flex justify-end mt-2">
                         <span className="bg-pink-500 text-white text-xs px-2 py-1 rounded-full">
@@ -414,34 +427,39 @@ const FriendsList = () => {
                   <div className="flex space-x-2">
                     <Link
                       to={`/chat/${friend.id}`}
-                      state={{ friendName: friend.name }} // <-- pass the name here
-                      className="flex-1 bg-linear-to-rfrom-pink-500 to-purple-600 text-white py-2 px-4 rounded-xl text-center font-semibold hover:from-pink-600 hover:to-purple-700 transition-all flex items-center justify-center space-x-2"
+                      state={{ friendName: friend.name }}
+                      onClick={(e) => e.stopPropagation()}
+
+                      className="flex-1 bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 px-4 rounded-xl text-center font-semibold hover:from-pink-600 hover:to-purple-700 transition-all flex items-center justify-center space-x-2"
                     >
                       <MessageCircle className="h-4 w-4" />
                       <span>Message</span>
                     </Link>
 
-                    <button onClick={startVoiceCall}
-                      className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedFriendId(friend.id);
+                        startVoiceCall(friend.id);
+                      }}
+                      className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all"
+                    >
                       <Phone className="h-4 w-4 text-gray-400" />
                     </button>
-                    {/* <button className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
-                      <Video className="h-4 w-4 text-gray-400" />
-                    </button> */}
 
                     <button
-
-                      onClick={startVideoCall}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startVideoCall(friend.id);
+                      }}
                       className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all disabled:opacity-40"
                     >
                       <Video className="h-4 w-4 text-gray-400" />
                     </button>
-
                   </div>
                 </div>
               ))}
             </div>
-
             {filteredFriends.length === 0 && friends.length > 0 && (
               <div className="text-center py-12">
                 <Search className="h-16 w-16 text-gray-600 mx-auto mb-4" />
