@@ -1,6 +1,9 @@
 
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios'
+import socket from "../Sockets/SocketService.js"
+
+
 import { useNavigate, Link } from 'react-router-dom';
 import {
   Heart,
@@ -20,17 +23,22 @@ import {
 import { AuthContext } from "../Context/Authcontext.js"
 
 const FriendsList = () => {
-      const BASE_URL = "https://shadii-com.onrender.com";
+  const BASE_URL = "https://shadii-com.onrender.com";
   const [friends, setFriends] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
+  // 🔴 NEW: store selected friend userId
+  const [selectedFriendId, setSelectedFriendId] = useState(null);   // maintaine useState where friendid will be stored and this id provided to socket 
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const {
     currentuser,
     isLoggedIn,
   } = useContext(AuthContext);
-   console.log("🧍 Current user ID:", currentuser?._id || currentuser?.id);
+  console.log("🧍 Current user ID:", currentuser?._id || currentuser?.id);
 
+
+
+  
   useEffect(() => {
     const fetchFriends = async () => {
       try {
@@ -39,17 +47,16 @@ const FriendsList = () => {
           withCredentials: true,
         });
 
-        console.log("Friends API Response:", res);
 
-        //  console.log("this is res" ,  res.data.friends);
+
+        // console.log("this is res", res.data.friends.length);
 
         if (res.data.success) {
           // Handle both array and object responses
-          const friendsData = res.data.friends|| [];
+          const friendsData = res.data.friends || [];
           const friendData = friendsData.map((friend) => {
             // Handle different response structures
             const userData = friend.user || friend;
-
             return {
               id: userData._id || friend._id,
               name: `${userData.personalInfo?.firstName || userData.firstName || "User"} ${userData.personalInfo?.lastName || userData.lastName || ""}`.trim(),
@@ -67,7 +74,7 @@ const FriendsList = () => {
             };
           });
 
-          console.log("this is fronted data ", friendData);
+          // console.log("this is fronted data ", friendData);
           setFriends(friendData);
         } else {
           console.warn("API returned success: false", res.data);
@@ -88,7 +95,16 @@ const FriendsList = () => {
     }
   }, [isLoggedIn]);
 
+
+
+
+
+
+
+ 
+
   const filteredFriends = friends.filter(friend => {
+
     const matchesSearch = friend.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTab = activeTab === 'all' ||
       (activeTab === 'online' && friend.isOnline) ||
@@ -97,10 +113,104 @@ const FriendsList = () => {
     return matchesSearch && matchesTab;
   });
 
+  // console.log("these srae the friend you have " , filteredFriends);
+
   const onlineCount = friends.filter(f => f.isOnline).length;
   const favoriteCount = friends.filter(f => f.isFavorite).length;
 
   const navigate = useNavigate();
+
+
+
+
+
+
+
+
+  const startVoiceCall = async () => {
+    console.log("📞 Start voice call clicked");
+
+    // Validate - CRITICAL FIX
+    const currentUserId = currentuser?._id || currentuser?.id;
+    if (!currentUserId) {
+      console.error("❌ Current user ID not found");
+      alert("Please login again");
+      return;
+    }
+
+    // VALIDATE selectedFriendId - THIS WAS MISSING!
+    const friendId = selectedFriendId;
+    if (!friendId) {
+      console.error("❌ No friend selected");
+      // alert("Please select a friend to call");
+      return;
+    }
+
+    // Generate call ID - Now friendId won't be null
+    const callId = `call_${Date.now()}_${currentUserId}_${friendId}`;
+
+    console.log("📞 Preparing call:", {
+      from: currentUserId,
+      to: friendId,
+      callId
+    });
+
+    try {
+      // Connect socket if not connected
+      if (!socket.isConnected) {
+        console.log("🔌 Connecting socket...");
+        await socket.connect(currentUserId);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // Prepare navigation data
+      const navigationData = {
+        callType: 'outgoing',
+        remoteUserId: friendId,
+        remoteUserName: 'Friend'
+      };
+
+      // Store in session storage
+      sessionStorage.setItem('callData', JSON.stringify({
+        callId,
+        from: currentUserId,
+        to: friendId,
+        timestamp: Date.now()
+      }));
+
+      // Navigate first
+      console.log("🚀 Navigating to call interface");
+      navigate(`/VoiceCall/${callId}/${currentUserId}`, {
+        state: navigationData
+      });
+
+    } catch (error) {
+      console.error("❌ Error starting call:", error);
+      alert("Failed to start call. Please try again.");
+    }
+  };
+
+  const startVideoCall = () => {
+
+    console.log("this is cliekced button ");
+
+    console.log("this is the friend id", selectedFriendId);
+    if (!selectedFriendId) return;
+
+    const currentUser = currentuser?._id || currentuser?.id;
+
+    console.log("this is the current user id ", currentUser)
+    const callId = `${currentUser}_${selectedFriendId}`;
+
+    socket.emit("call-user", {
+      from: currentUser,
+      to: selectedFriendId,
+      callId,
+    });
+
+    navigate(`/VideoCall/${callId}`);
+  };
+
 
   // Show login required message
   if (!isLoggedIn) {
@@ -150,8 +260,8 @@ const FriendsList = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold mb-2">Your Friends</h1>
-            <p className="text-gray-400">Stay connected with your friends</p>
+            {/* <h1 className="text-3xl font-bold mb-2">Your Friends</h1>
+            <p className="text-gray-400">Stay connected with your friends</p> */}
           </div>
           <div className="flex items-center space-x-4">
             <Link
@@ -163,21 +273,7 @@ const FriendsList = () => {
           </div>
         </div>
 
-        {/* Stats Header */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 text-center">
-            <div className="text-3xl font-bold text-white mb-2">{friends.length}</div>
-            <div className="text-gray-400">Total Friends</div>
-          </div>
-          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 text-center">
-            <div className="text-3xl font-bold text-green-400 mb-2">{onlineCount}</div>
-            <div className="text-gray-400">Online Now</div>
-          </div>
-          <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 text-center">
-            <div className="text-3xl font-bold text-yellow-400 mb-2">{favoriteCount}</div>
-            <div className="text-gray-400">Favorites</div>
-          </div>
-        </div>
+       
 
         {/* Search and Tabs */}
         <div className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 mb-8">
@@ -235,6 +331,12 @@ const FriendsList = () => {
               {filteredFriends.map(friend => (
                 <div
                   key={friend.id}
+                  onClick={() => {
+                    navigate(`/userprofile/${friend.id}`)
+                    console.log("👉 Friend clicked ID:", friend.id); // 🔴 NEW
+                    setSelectedFriendId(friend.id);
+                  }}
+
                   className="bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl p-6 hover:bg-white/10 hover:border-white/20 transition-all group"
                 >
                   {/* Friend Header */}
@@ -319,12 +421,22 @@ const FriendsList = () => {
                       <span>Message</span>
                     </Link>
 
-                    <button className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
+                    <button onClick={startVoiceCall}
+                      className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
                       <Phone className="h-4 w-4 text-gray-400" />
                     </button>
-                    <button className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
+                    {/* <button className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all">
+                      <Video className="h-4 w-4 text-gray-400" />
+                    </button> */}
+
+                    <button
+
+                      onClick={startVideoCall}
+                      className="p-2 bg-white/10 border border-white/10 rounded-xl hover:bg-white/20 transition-all disabled:opacity-40"
+                    >
                       <Video className="h-4 w-4 text-gray-400" />
                     </button>
+
                   </div>
                 </div>
               ))}
