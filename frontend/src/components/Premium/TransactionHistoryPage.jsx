@@ -5,6 +5,7 @@ import {
     CheckCircle,
     XCircle,
     Clock,
+    MessageSquare,
     Download,
     Filter,
     Search,
@@ -471,3 +472,4 @@ const TransactionHistoryPage = () => {
 
 
 export default TransactionHistoryPage;
+
