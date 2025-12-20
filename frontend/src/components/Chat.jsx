@@ -18,7 +18,7 @@ import { AuthContext } from '../Context/Authcontext.js';
 
 const Chat = () => {
 
-     const BASE_URL = "https://shadii-com.onrender.com"; // use production URL
+    const BASE_URL = "https://shadii-com.onrender.com"; // use production URL
     const { friendId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
@@ -40,7 +40,6 @@ const Chat = () => {
         if (!currentuser?._id) return;
 
         socket.emit("userOnline", currentuser._id);
-
         socket.on("receiveMessage", (data) => {
             if (data.from === friendId) {
                 setMessages((prev) => [
@@ -334,10 +333,10 @@ const Chat = () => {
 
                                                 {/* Message Bubble */}
                                                 <div className={`px-4 py-2 rounded-2xl ${sentByMe
-                                                        ? message.failed
-                                                            ? 'bg-red-500/20 border border-red-500'
-                                                            : 'bg-blue-500 text-white'
-                                                        : 'bg-gray-700/80 text-gray-100 border border-gray-600/30'
+                                                    ? message.failed
+                                                        ? 'bg-red-500/20 border border-red-500'
+                                                        : 'bg-blue-500 text-white'
+                                                    : 'bg-gray-700/80 text-gray-100 border border-gray-600/30'
                                                     } ${message.isTemp ? 'opacity-70 animate-pulse' : ''}`}>
                                                     <p className="text-sm break-words leading-relaxed">
                                                         {message.message}
@@ -439,8 +438,8 @@ const Chat = () => {
                             type="submit"
                             disabled={!newMessage.trim() || !chatId || newMessage.length > MAX_MESSAGE_LENGTH}
                             className={`p-3 rounded-full transition-all flex-shrink-0 ${newMessage.trim() && chatId && newMessage.length <= MAX_MESSAGE_LENGTH
-                                    ? 'bg-linear-to-rfrom-blue-500 to-purple-600 text-white shadow-lg hover:shadow-xl'
-                                    : 'bg-white/10 text-gray-400 cursor-not-allowed'
+                                ? 'bg-linear-to-rfrom-blue-500 to-purple-600 text-white shadow-lg hover:shadow-xl'
+                                : 'bg-white/10 text-gray-400 cursor-not-allowed'
                                 }`}
                         >
                             <Send className="w-5 h-5" />
