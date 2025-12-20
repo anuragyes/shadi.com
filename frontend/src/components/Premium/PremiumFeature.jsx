@@ -43,7 +43,7 @@ const PremiumFeaturesPage = ({ userPlan = 'free', onUpgrade }) => {
     const currentUser = JSON.parse(localStorage.getItem("user"));
 
     const currentuserId = currentUser.id;
-    const BASE_URL = "http://localhost:5000"
+    const BASE_URL = "https://shadii-com.onrender.com"
 
 
     // Load Razorpay script
@@ -895,6 +895,7 @@ const PremiumFeaturesPage = ({ userPlan = 'free', onUpgrade }) => {
 };
 
 export default PremiumFeaturesPage;
+
 
 
 
