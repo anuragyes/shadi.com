@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { AuthContext } from '../Context/Authcontext.js';
-
 const IncomingRequests = () => {
   const BASE_URL = "https://shadii-com.onrender.com";
   const [requests, setRequests] = useState([]);
@@ -36,7 +35,7 @@ const IncomingRequests = () => {
           return;
         }
 
-        console.log("🔄 Fetching requests for user:", userId);
+        // console.log("🔄 Fetching requests for user:", userId);
 
         const res = await axios.get(
           `${BASE_URL}/api/user/request/incoming/${userId}`,
@@ -48,11 +47,11 @@ const IncomingRequests = () => {
           }
         );
 
-        console.log("📦 API Response:", res.data);
+        // console.log("📦 API Response:", res.data);
 
         if (res.data && res.data.success) {
           setRequests(res.data.requests || []);
-          console.log("✅ Requests set:", res.data.requests);
+          // console.log("✅ Requests set:", res.data.requests);
         } else {
           toast.error(res.data?.message || "Failed to load requests");
           setRequests([]);
@@ -85,7 +84,7 @@ const IncomingRequests = () => {
   const handleAccept = async (requestId, senderId) => {
     setActionLoading(requestId);
     try {
-      console.log("✅ Accepting request:", requestId, "from sender:", senderId);
+      // console.log("✅ Accepting request:", requestId, "from sender:", senderId);
 
       const res = await axios.put(
         `${BASE_URL}/api/user/request/accept`,
@@ -98,7 +97,7 @@ const IncomingRequests = () => {
         }
       );
 
-      console.log("📨 Accept response:", res);
+      // console.log("📨 Accept response:", res);
 
       if (res.data && res.data.success) {
         toast.success("Request accepted successfully!");
@@ -122,7 +121,7 @@ const IncomingRequests = () => {
   const handleReject = async (requestId, senderId) => {
     setActionLoading(requestId);
     try {
-      console.log("❌ Rejecting request:", requestId, "from sender:", senderId);
+      // console.log("❌ Rejecting request:", requestId, "from sender:", senderId);
 
       const res = await axios.put(
         `${BASE_URL}/api/user/request/cancel-by-user`,
@@ -138,7 +137,7 @@ const IncomingRequests = () => {
         }
       );
 
-      console.log("📨 Reject response:", res.data);
+      // console.log("📨 Reject response:", res.data);
 
       if (res.data && res.data.success) {
         toast.success("Request rejected successfully!");
@@ -187,7 +186,7 @@ const IncomingRequests = () => {
   // Filter requests based on sender name or email
   const filteredRequests = requests.filter(req => {
     if (!searchTerm) return true;
-    
+
     const searchableText = [
       req.sender?.personalInfo?.firstName || '',
       req.sender?.personalInfo?.lastName || '',
@@ -200,7 +199,7 @@ const IncomingRequests = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center p-4">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <h3 className="text-lg font-medium text-gray-900">Loading requests</h3>
@@ -211,33 +210,33 @@ const IncomingRequests = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="bg-gradient-to-br from-slate-700 via-purple-900 to-slate-900 text-white  border-gray-200 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 ">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between py-6 space-y-4 sm:space-y-0">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Users className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Connection Requests</h1>
-                <p className="text-gray-500 text-sm mt-1">
+                <h1 className="text-2xl font-bold text-white-900">Connection Requests</h1>
+                <p className="text-white text-sm mt-1">
                   {requests.length} incoming request{requests.length !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
 
             {/* Search Bar */}
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <div className="flex-1 max-w-md  ">
+              <div className="relative ">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 " />
                 <input
                   type="text"
                   placeholder="Search by name or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  className="w-full pl-10 pr-4 py-3   rounded-lg focus:ring-2 focus:ring-blue-500 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white"
                 />
               </div>
             </div>
@@ -249,28 +248,28 @@ const IncomingRequests = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
-            <div className="text-3xl font-bold text-gray-900">{requests.length}</div>
-            <div className="text-gray-500 text-sm mt-1">Total Requests</div>
+          <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl  p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-white-900">{requests.length}</div>
+            <div className="text-white text-sm mt-1">Total Requests</div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
-            <div className="text-3xl font-bold text-amber-600">{requests.length}</div>
-            <div className="text-gray-500 text-sm mt-1">Pending</div>
+          <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl  p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-white-600">{requests.length}</div>
+            <div className="text-white-500 text-sm mt-1">Pending</div>
           </div>
-          <div className="bg-white rounded-xl border border-gray-200 p-6 text-center shadow-sm">
-            <div className="text-3xl font-bold text-gray-400">0</div>
+          <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl  p-6 text-center shadow-sm">
+            <div className="text-3xl font-bold text-white">0</div>
             <div className="text-gray-500 text-sm mt-1">Accepted</div>
           </div>
         </div>
 
         {/* Requests List */}
         {filteredRequests.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-12 text-center shadow-sm">
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+          <div className=" rounded-xl border-gray-200 p-8 sm:p-12 text-center shadow-sm">
+            <Users className="w-16 h-16 text-white mx-auto mb-4" />
+            <h3 className="text-xl font-semibold text-white mb-2">
               {searchTerm ? "No matching requests" : "No connection requests"}
             </h3>
-            <p className="text-gray-500 max-w-sm mx-auto">
+            <p className="text-white max-w-sm mx-auto">
               {searchTerm
                 ? "Try adjusting your search terms to find what you're looking for."
                 : "When someone sends you a connection request, it will appear here."
@@ -278,11 +277,11 @@ const IncomingRequests = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 ">
             {filteredRequests.map((request) => (
               <div
                 key={request.requestId}
-                className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
+                className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl   overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200"
               >
                 <div className="p-6">
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
@@ -298,8 +297,8 @@ const IncomingRequests = () => {
                       {/* User Details */}
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
-                            {request.sender?.personalInfo?.firstName && request.sender?.personalInfo?.lastName 
+                          <h3 className="text-lg font-semibold text-white">
+                            {request.sender?.personalInfo?.firstName && request.sender?.personalInfo?.lastName
                               ? `${request.sender.personalInfo.firstName} ${request.sender.personalInfo.lastName}`
                               : 'Unknown User'
                             }
@@ -313,20 +312,17 @@ const IncomingRequests = () => {
                         {/* Contact Info */}
                         <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-6 text-gray-600 text-sm mb-3 space-y-1 sm:space-y-0">
                           <div className="flex items-center space-x-2">
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            <span>{request.sender?.email || 'No email'}</span>
+                            <Mail className="w-4 h-4 text-white" />
+                            <span className="text-white">{request.sender?.email || 'No email'}</span>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="w-4 h-4 text-gray-400" />
-                            <span>User ID: {request.sender?._id?.slice(-8) || 'N/A'}</span>
-                          </div>
+                         
                         </div>
 
                         {/* Request Message */}
                         {request.message && (
                           <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                             <div className="flex items-start space-x-3">
-                              <MessageCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                              <MessageCircle className="w-4 h-4 text-white mt-0.5 flex-shrink-0" />
                               <p className="text-blue-800 text-sm leading-relaxed">"{request.message}"</p>
                             </div>
                           </div>
@@ -344,8 +340,10 @@ const IncomingRequests = () => {
                     <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between lg:justify-start space-y-4 sm:space-y-0 sm:space-x-4 lg:space-x-0 lg:space-y-4">
                       {/* Timestamp - Desktop */}
                       <div className="hidden lg:flex items-center text-sm text-gray-500 whitespace-nowrap">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        {formatDate(request.createdAt)}
+                        <Calendar className="w-6 h-6 mr-2 text-white" />
+                       <div className="text-white ">
+                         {formatDate(request.createdAt)}
+                       </div>
                       </div>
 
                       {/* Action Buttons */}
