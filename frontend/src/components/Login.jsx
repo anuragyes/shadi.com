@@ -49,7 +49,7 @@ const Login = () => {
       
       if (result.success) {
         toast.success('Login successful!');
-        navigate('/discover');
+        navigate('/');
       } else {
         throw new Error(result.message || 'Login failed');
       }
