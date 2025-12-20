@@ -1,4 +1,4 @@
-
+import ChatRequest from "../Models/ChatstartRequest.js"
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
@@ -237,7 +237,7 @@ export const Login = async (req, res) => {
     // ✅ FIX: Update isActive to true in database
     const updatedUser = await User.findByIdAndUpdate(
       user._id,
-      { 
+      {
         isActive: true,
         lastLogin: new Date() // Optional: also update last login time
       },
@@ -450,9 +450,9 @@ export const UserLogout = async (req, res) => {
       console.error("❌ JWT verification failed:", jwtError.message);
       // Clear invalid token anyway
       res.clearCookie("token");
-      return res.status(401).json({ 
-        success: false, 
-        message: "Invalid token" 
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token"
       });
     }
 
@@ -460,31 +460,31 @@ export const UserLogout = async (req, res) => {
     if (!decoded) {
       console.log("❌ Token decoded to null/undefined");
       res.clearCookie("token");
-      return res.status(401).json({ 
-        success: false, 
-        message: "Invalid token structure" 
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token structure"
       });
     }
 
     // Get user ID - try different possible properties
     const userId = decoded.id || decoded._id || decoded.userId || decoded.userID;
-    
+
     console.log(`👤 Extracted user ID: ${userId} from decoded:`, decoded);
 
     if (!userId) {
       console.log("❌ No user ID found in token");
       console.log("🔍 Available properties in decoded token:", Object.keys(decoded));
       res.clearCookie("token");
-      return res.status(401).json({ 
-        success: false, 
-        message: "User ID not found in token" 
+      return res.status(401).json({
+        success: false,
+        message: "User ID not found in token"
       });
     }
 
     // Set isActive to false in database
     const updatedUser = await User.findByIdAndUpdate(
-      userId, 
-      { 
+      userId,
+      {
         isActive: false,
         lastActive: new Date()
       },
@@ -495,9 +495,9 @@ export const UserLogout = async (req, res) => {
     if (!updatedUser) {
       console.log(`❌ User not found with ID: ${userId}`);
       res.clearCookie("token");
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
       });
     }
 
@@ -512,8 +512,8 @@ export const UserLogout = async (req, res) => {
 
     console.log("🍪 Cookie cleared successfully");
 
-    return res.status(200).json({ 
-      success: true, 
+    return res.status(200).json({
+      success: true,
       message: "Logout successful",
       userUpdated: {
         id: userId,
@@ -523,29 +523,53 @@ export const UserLogout = async (req, res) => {
 
   } catch (error) {
     console.error("💥 Logout Error:", error);
-    
+
     // Clear cookie even on error
     res.clearCookie("token");
-    
-    return res.status(500).json({ 
-      success: false, 
-      message: "Internal server error" 
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 };
 
 
 export const GetAllUser = async (req, res) => {
-
   try {
-    const AllUser = await User.find();
-    res.status(200).json(AllUser);
+    const userId = req.params.id; // the logged-in user ID
+    console.log("this is userid from ba backend", userId);
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID missing' });
+    }
+
+    // 1️⃣ Find accepted friends
+    const accepted = await ChatRequest.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+      status: "accepted",
+    });
+
+    // 2️⃣ Extract friend IDs
+    const friendIds = accepted.map((reqDoc) =>
+      reqDoc.sender.toString() === userId.toString()
+        ? reqDoc.receiver.toString()
+        : reqDoc.sender.toString()
+    );
+
+    // 3️⃣ Exclude the user also
+    friendIds.push(userId);
+
+    // 4️⃣ Find all users who are NOT in friend list
+    const notFriends = await User.find({
+      _id: { $nin: friendIds },
+    });
+
+    res.status(200).json(notFriends);
+
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    res.status(500).json({ message: "Server error", error });
   }
-}
-
-
+};
 
 
 
@@ -723,7 +747,7 @@ export const checkStatusOnline = async (req, res) => {
   try {
     const { id } = req.params; // get user ID from URL
 
-     console.log("this is the userid" , id)
+    console.log("this is the userid", id)
 
     if (!id) {
       return res.status(400).json({
