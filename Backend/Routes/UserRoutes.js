@@ -53,7 +53,7 @@ const upload = multer({
 // ✅ Public routes
 Userrouter.post('/signup', UserSignup);
 Userrouter.post('/login', Login);
-Userrouter.get('/all-users', GetAllUser); // changed for consistency
+Userrouter.get('/all-users/:id', GetAllUser); // changed for consistency
 Userrouter.get('/:id', getUserById);
 
 // ✅ Protected routes
