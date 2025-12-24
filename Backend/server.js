@@ -1,6 +1,4 @@
 
-
-
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -72,6 +70,8 @@ const userSockets = new Map();          // userId -> socket.id
 const socketUsers = new Map();          // socket.id -> userId
 const pendingCalls = new Map();         // userId -> [{ from, callId, timestamp }]
 const activeCalls = new Map();          // callId -> { participants: [userId1, userId2] }
+const chatRooms = new Map();            // roomId -> Set of socket.id
+const typingUsers = new Map();          // userId -> {roomId, lastTypingTime}
 
 /* =======================
    HELPER FUNCTIONS
@@ -83,35 +83,61 @@ const getUserSocket = (userId) => {
 const isUserOnline = (userId) => {
   return userSockets.has(userId);
 };
+
 const deliverPendingCalls = (userId, socketId) => {
-    if (pendingCalls.has(userId)) {
-        const calls = pendingCalls.get(userId);
-        const now = Date.now();
-        const thirtySecondsAgo = now - 30000;
-        
-        // Filter out old pending calls (> 30 seconds)
-        const validCalls = calls.filter(call => call.timestamp > thirtySecondsAgo);
-        
-        validCalls.forEach(call => {
-            const callData = {
-                from: call.from,
-                callId: call.callId,
-                timestamp: call.timestamp
-            };
-            
-            // ✅ Include stored offer if available
-            if (call.offer) {
-                callData.offer = call.offer;
-            }
-            
-            io.to(socketId).emit("incoming-call", callData);
-            console.log(`📨 Delivered pending call to ${userId}`, 
-                        call.offer ? "WITH offer" : "WITHOUT offer");
-        });
-        
-        // Update pending calls with only valid ones
-        pendingCalls.set(userId, validCalls);
+  if (pendingCalls.has(userId)) {
+    const calls = pendingCalls.get(userId);
+    const now = Date.now();
+    const thirtySecondsAgo = now - 30000;
+    
+    // Filter out old pending calls (> 30 seconds)
+    const validCalls = calls.filter(call => call.timestamp > thirtySecondsAgo);
+    
+    validCalls.forEach(call => {
+      const callData = {
+        from: call.from,
+        callId: call.callId,
+        timestamp: call.timestamp
+      };
+      
+      // ✅ Include stored offer if available
+      if (call.offer) {
+        callData.offer = call.offer;
+      }
+      
+      io.to(socketId).emit("incoming-call", callData);
+      console.log(`📨 Delivered pending call to ${userId}`, 
+        call.offer ? "WITH offer" : "WITHOUT offer");
+    });
+    
+    // Update pending calls with only valid ones
+    pendingCalls.set(userId, validCalls);
+  }
+};
+
+// Chat helper functions
+const joinChatRoom = (socket, roomId, userId) => {
+  socket.join(roomId);
+  
+  if (!chatRooms.has(roomId)) {
+    chatRooms.set(roomId, new Set());
+  }
+  chatRooms.get(roomId).add(socket.id);
+  
+  console.log(`👤 ${userId} (${socket.id}) joined chat room: ${roomId}`);
+};
+
+const leaveChatRoom = (socket, roomId, userId) => {
+  socket.leave(roomId);
+  
+  if (chatRooms.has(roomId)) {
+    chatRooms.get(roomId).delete(socket.id);
+    if (chatRooms.get(roomId).size === 0) {
+      chatRooms.delete(roomId);
     }
+  }
+  
+  console.log(`👤 ${userId} (${socket.id}) left chat room: ${roomId}`);
 };
 
 const cleanupOldCalls = () => {
@@ -128,7 +154,12 @@ const cleanupOldCalls = () => {
     }
   }
   
-  // Cleanup active calls (optional - implement based on your needs)
+  // Cleanup typing status older than 5 seconds
+  for (const [userId, typingData] of typingUsers.entries()) {
+    if (now - typingData.lastTypingTime > 5000) {
+      typingUsers.delete(userId);
+    }
+  }
 };
 
 /* =======================
@@ -152,97 +183,251 @@ io.on("connection", (socket) => {
     // Deliver any pending calls
     deliverPendingCalls(userId, socket.id);
   });
-  
-socket.on("initiate-call", (data) => {
 
-  console.log("🔍 INITIATE-CALL DATA RECEIVED:", {
-        from: data.from,
-        to: data.to,
-        callId: data.callId,
-        hasOffer: !!data.offer,
-        offerType: typeof data.offer,
-        offerKeys: data.offer ? Object.keys(data.offer) : 'none'
+  /* =======================
+     CHAT REAL-TIME EVENTS
+  ======================= */
+  
+  // Join chat room
+  socket.on("joinRoom", (roomId) => {
+    const userId = socketUsers.get(socket.id);
+    if (roomId && userId) {
+      joinChatRoom(socket, roomId, userId);
+      
+      // Notify others in the room (optional)
+      socket.to(roomId).emit("userJoinedRoom", {
+        userId,
+        roomId,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
+  // Leave chat room
+  socket.on("leaveRoom", (roomId) => {
+    const userId = socketUsers.get(socket.id);
+    if (roomId && userId) {
+      leaveChatRoom(socket, roomId, userId);
+    }
+  });
+  
+  // Send message
+  socket.on("sendMessage", (data) => {
+    const { from, to, message, roomId } = data;
+    const senderId = socketUsers.get(socket.id);
+    
+    if (!senderId || !message || !roomId) {
+      console.error("❌ sendMessage: Missing required fields", data);
+      return;
+    }
+    
+    console.log(`💬 Message from ${senderId} to room ${roomId}: ${message.substring(0, 50)}...`);
+    
+    // Get recipient socket ID if sending to specific user
+    const recipientSocketId = getUserSocket(to);
+    
+    // Create message object
+    const messageData = {
+      _id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      from: senderId,
+      message: message,
+      roomId: roomId,
+      timestamp: new Date().toISOString(),
+      type: 'text'
+    };
+    
+    // 1. Broadcast to the chat room
+    io.to(roomId).emit("newMessage", messageData);
+    
+    // 2. Send to specific recipient if they're not in the room
+    if (to && recipientSocketId && !socket.rooms.has(roomId)) {
+      io.to(recipientSocketId).emit("receiveMessage", {
+        ...messageData,
+        to: to
+      });
+    }
+    
+    // 3. Send delivery confirmation to sender
+    socket.emit("messageSent", {
+      success: true,
+      messageId: messageData._id,
+      timestamp: messageData.timestamp
+    });
+    
+    // Log the message delivery
+    console.log(`📤 Message delivered to room ${roomId} (${io.sockets.adapter.rooms.get(roomId)?.size || 0} users)`);
+  });
+  
+  // Typing indicator
+  socket.on("typing", (data) => {
+    const { to, roomId, isTyping } = data;
+    const userId = socketUsers.get(socket.id);
+    
+    if (!userId || !roomId) return;
+    
+    if (isTyping) {
+      typingUsers.set(userId, {
+        roomId,
+        lastTypingTime: Date.now()
+      });
+    } else {
+      typingUsers.delete(userId);
+    }
+    
+    // Broadcast typing status to room
+    socket.to(roomId).emit("typing", {
+      from: userId,
+      isTyping,
+      roomId
+    });
+    
+    // Also send to specific recipient if provided
+    if (to) {
+      const recipientSocketId = getUserSocket(to);
+      if (recipientSocketId) {
+        io.to(recipientSocketId).emit("typing", {
+          from: userId,
+          isTyping,
+          roomId
+        });
+      }
+    }
+  });
+  
+  // Message read receipt
+  socket.on("messageRead", (data) => {
+    const { messageIds, roomId, from } = data;
+    const userId = socketUsers.get(socket.id);
+    
+    if (!userId || !roomId || !messageIds?.length) return;
+    
+    console.log(`👁️ User ${userId} read messages in room ${roomId}:`, messageIds);
+    
+    // Notify sender that messages were read
+    const senderSocketId = getUserSocket(from);
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messagesRead", {
+        messageIds,
+        readerId: userId,
+        roomId,
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Broadcast to room (optional)
+    io.to(roomId).emit("messagesReadUpdate", {
+      messageIds,
+      readerId: userId,
+      roomId
+    });
+  });
+  
+  // User online/offline status
+  socket.on("getOnlineStatus", (userIds) => {
+    const userId = socketUsers.get(socket.id);
+    if (!userId) return;
+    
+    const status = {};
+    userIds.forEach(id => {
+      status[id] = isUserOnline(id);
+    });
+    
+    socket.emit("onlineStatus", status);
+  });
+  
+  /* =======================
+     CALL RELATED EVENTS
+  ======================= */
+  
+  socket.on("initiate-call", (data) => {
+    console.log("🔍 INITIATE-CALL DATA RECEIVED:", {
+      from: data.from,
+      to: data.to,
+      callId: data.callId,
+      hasOffer: !!data.offer,
+      offerType: typeof data.offer,
+      offerKeys: data.offer ? Object.keys(data.offer) : 'none'
     });
     
     const { from, to, callId, offer } = data; // ✅ Extract offer too
     
     if (!from || !to || !callId) {
-        console.error("❌ initiate-call: Missing required fields", data);
-        socket.emit("call-error", { 
-            callId, 
-            error: "Missing required fields" 
-        });
-        return;
+      console.error("❌ initiate-call: Missing required fields", data);
+      socket.emit("call-error", { 
+        callId, 
+        error: "Missing required fields" 
+      });
+      return;
     }
     
     console.log(`📞 ${from} is calling ${to} | callId: ${callId}`, 
-                `Has offer: ${!!offer}`);
+      `Has offer: ${!!offer}`);
     
     const targetSocketId = getUserSocket(to);
     
     if (targetSocketId) {
-        // User is online - send call immediately WITH OFFER
-        const callData = {
-            from,
-            callId,
-            timestamp: Date.now()
-        };
-        
-        // ✅ Include the offer if it exists
-        if (offer) {
-            callData.offer = offer;
-        }
-        
-        io.to(targetSocketId).emit("incoming-call", callData);
-        
-        // Track the call as active
-        activeCalls.set(callId, {
-            participants: [from, to],
-            startTime: Date.now(),
-            status: "ringing"
-        });
-        
-        console.log(`📨 Call delivered to ${to}`, offer ? "WITH offer" : "WITHOUT offer");
+      // User is online - send call immediately WITH OFFER
+      const callData = {
+        from,
+        callId,
+        timestamp: Date.now()
+      };
+      
+      // ✅ Include the offer if it exists
+      if (offer) {
+        callData.offer = offer;
+      }
+      
+      io.to(targetSocketId).emit("incoming-call", callData);
+      
+      // Track the call as active
+      activeCalls.set(callId, {
+        participants: [from, to],
+        startTime: Date.now(),
+        status: "ringing"
+      });
+      
+      console.log(`📨 Call delivered to ${to}`, offer ? "WITH offer" : "WITHOUT offer");
     } else {
-        // User is offline - store in pending calls
-        if (!pendingCalls.has(to)) {
-            pendingCalls.set(to, []);
-        }
-        
-        pendingCalls.get(to).push({
-            from,
-            callId,
-            timestamp: Date.now(),
-            offer: offer || null // ✅ Store offer if available
-        });
-        
-        console.log(`💾 User ${to} is offline, call stored`);
-        
-        // Notify caller that recipient is offline
-        socket.emit("call-status", {
-            callId,
-            status: "pending",
-            message: "User is offline, call will be delivered when they come online"
-        });
+      // User is offline - store in pending calls
+      if (!pendingCalls.has(to)) {
+        pendingCalls.set(to, []);
+      }
+      
+      pendingCalls.get(to).push({
+        from,
+        callId,
+        timestamp: Date.now(),
+        offer: offer || null // ✅ Store offer if available
+      });
+      
+      console.log(`💾 User ${to} is offline, call stored`);
+      
+      // Notify caller that recipient is offline
+      socket.emit("call-status", {
+        callId,
+        status: "pending",
+        message: "User is offline, call will be delivered when they come online"
+      });
     }
     
     // Auto timeout after 30 seconds
     setTimeout(() => {
-        if (activeCalls.has(callId) && 
-            activeCalls.get(callId).status === "ringing") {
-            
-            activeCalls.delete(callId);
-            
-            // Notify both users
-            socket.emit("call-timeout", { callId });
-            if (targetSocketId) {
-                io.to(targetSocketId).emit("call-timeout", { callId });
-            }
-            
-            console.log(`⏰ Call ${callId} timed out`);
+      if (activeCalls.has(callId) && 
+        activeCalls.get(callId).status === "ringing") {
+        
+        activeCalls.delete(callId);
+        
+        // Notify both users
+        socket.emit("call-timeout", { callId });
+        if (targetSocketId) {
+          io.to(targetSocketId).emit("call-timeout", { callId });
         }
+        
+        console.log(`⏰ Call ${callId} timed out`);
+      }
     }, 30000);
-});
+  });
   
   // Accept call
   socket.on("accept-call", (data) => {
@@ -399,6 +584,16 @@ socket.on("initiate-call", (data) => {
       
       console.log(`🟠 User offline: ${userId}`);
       
+      // Clean up typing status
+      typingUsers.delete(userId);
+      
+      // Leave all chat rooms
+      socket.rooms.forEach(room => {
+        if (room !== socket.id) { // Skip default room
+          leaveChatRoom(socket, room, userId);
+        }
+      });
+      
       // Notify others about disconnection
       socket.broadcast.emit("user-disconnected", { userId });
       
@@ -440,7 +635,27 @@ app.get("/health", (req, res) => {
     status: "ok",
     onlineUsers: userSockets.size,
     activeCalls: activeCalls.size,
-    pendingCalls: pendingCalls.size
+    pendingCalls: pendingCalls.size,
+    chatRooms: chatRooms.size,
+    typingUsers: typingUsers.size
+  });
+});
+
+// Socket status endpoint
+app.get("/socket-status", (req, res) => {
+  const users = Array.from(userSockets.entries()).map(([userId, socketId]) => ({
+    userId,
+    socketId,
+    rooms: Array.from(io.sockets.adapter.sids.get(socketId) || [])
+  }));
+  
+  res.json({
+    totalConnections: io.engine.clientsCount,
+    users: users,
+    chatRooms: Array.from(chatRooms.entries()).map(([roomId, sockets]) => ({
+      roomId,
+      userCount: sockets.size
+    }))
   });
 });
 
@@ -457,6 +672,7 @@ const startServer = async () => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);
       console.log(`📡 WebSocket available at ws://localhost:${PORT}`);
+      console.log(`🔍 Socket status: http://localhost:${PORT}/socket-status`);
     });
   } catch (err) {
     console.error("❌ Server failed:", err);
