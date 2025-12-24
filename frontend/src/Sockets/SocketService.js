@@ -38,7 +38,7 @@ class SocketService {
 
       this.isConnecting = true;
       this.userId = userId;
-      
+
       console.log("🔌 Connecting socket for:", userId);
 
       // Clean up existing socket
@@ -74,28 +74,28 @@ class SocketService {
         this.isConnected = true;
         this.isConnecting = false;
         this.reconnectAttempts = 0;
-        
-        // Register user
-    // Register user (BACKEND EXPECTS THIS)
-this.socket.emit("userOnline", userId);
-console.log("🟢 userOnline emitted:", userId);
 
-        
+        // Register user
+        // Register user (BACKEND EXPECTS THIS)
+        this.socket.emit("userOnline", userId);
+        console.log("🟢 userOnline emitted:", userId);
+
+
         // Process queued events
         this.processQueue();
-        
+
         resolve(this.socket);
-        
+
         // Notify listeners
         this.connectionListeners.forEach(cb => cb(true));
       };
 
       const onConnectError = (error) => {
         clearTimeout(connectionTimeout);
-        console.error("❌ Connection error:", error);
+        console.error(" Connection error:", error);
         this.isConnecting = false;
         this.reconnectAttempts++;
-        
+
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
           this.cleanupSocket();
           reject(new Error(`Connection failed after ${this.maxReconnectAttempts} attempts`));
@@ -105,14 +105,14 @@ console.log("🟢 userOnline emitted:", userId);
       };
 
       const onDisconnect = (reason) => {
-        console.log("🔴 Disconnected:", reason);
+        console.log(" Disconnected:", reason);
         this.isConnected = false;
-        
+
         // Notify error listeners
         if (reason !== 'io client disconnect') {
           this.emitError(new Error(`Disconnected: ${reason}`));
         }
-        
+
         this.connectionListeners.forEach(cb => cb(false));
       };
 
@@ -174,36 +174,36 @@ console.log("🟢 userOnline emitted:", userId);
   /* ================= EVENT QUEUE ================= */
   queueEvent(event, data) {
     // Don't queue if already in queue (prevent duplicates)
-    const isAlreadyQueued = this.eventQueue.some(item => 
+    const isAlreadyQueued = this.eventQueue.some(item =>
       item.event === event && JSON.stringify(item.data) === JSON.stringify(data)
     );
-    
+
     if (!isAlreadyQueued) {
       this.eventQueue.push({ event, data, timestamp: Date.now() });
-      console.log(`📥 Queued event: ${event}`, data);
+      console.log(` Queued event: ${event}`, data);
     }
   }
 
   processQueue() {
     if (this.eventQueue.length === 0) return;
-    
-    console.log(`📤 Processing ${this.eventQueue.length} queued events`);
-    
+
+    console.log(` Processing ${this.eventQueue.length} queued events`);
+
     // Filter out old events (older than 30 seconds)
     const now = Date.now();
     const recentEvents = this.eventQueue.filter(
       item => now - item.timestamp < 30000
     );
-    
+
     recentEvents.forEach(({ event, data }) => {
       try {
-        console.log(`📤 Emitting queued event: ${event}`);
+        console.log(` Emitting queued event: ${event}`);
         this.socket.emit(event, data);
       } catch (error) {
-        console.error(`❌ Failed to emit queued event ${event}:`, error);
+        console.error(` Failed to emit queued event ${event}:`, error);
       }
     });
-    
+
     // Update queue with only failed events (we'll retry them)
     this.eventQueue = this.eventQueue.filter(
       item => !recentEvents.includes(item)
@@ -214,30 +214,89 @@ console.log("🟢 userOnline emitted:", userId);
   emit(event, data) {
     // Validate socket
     if (!this.socket) {
-      console.error(`❌ Cannot emit ${event}: socket not initialized`);
+      console.error(` Cannot emit ${event}: socket not initialized`);
       this.queueEvent(event, data);
       return false;
     }
-    
+
     // Check connection
     if (!this.socket.connected) {
-      console.warn(`⚠️ Socket not connected, queuing: ${event}`);
+      console.warn(` Socket not connected, queuing: ${event}`);
       this.queueEvent(event, data);
       return false;
     }
-    
+
     // Emit with error handling
     try {
       console.log(`📤 Emitting ${event}:`, data);
       this.socket.emit(event, data);
       return true;
     } catch (error) {
-      console.error(`❌ Error emitting ${event}:`, error);
+      console.error(` Error emitting ${event}:`, error);
       this.queueEvent(event, data);
       return false;
     }
   }
+    
 
+  // Add these methods to your existing SocketService class in Socket.js
+
+/* ================= CHAT METHODS ================= */
+sendChatMessage(data) {
+  console.log('💬 Sending chat message to:', data.to);
+  return this.emit("sendMessage", data);
+}
+
+joinChatRoom(roomId) {
+  console.log('👤 Joining chat room:', roomId);
+  return this.emit("joinRoom", roomId);
+}
+
+leaveChatRoom(roomId) {
+  console.log('👤 Leaving chat room:', roomId);
+  return this.emit("leaveRoom", roomId);
+}
+
+sendTypingIndicator(data) {
+  return this.emit("typing", data);
+}
+
+sendMessageRead(data) {
+  return this.emit("messageRead", data);
+}
+
+getOnlineStatus(userIds) {
+  return this.emit("getOnlineStatus", userIds);
+}
+
+/* ================= CHAT EVENT LISTENERS ================= */
+onNewMessage(callback) {
+  return this.on("newMessage", callback);
+}
+
+onReceiveMessage(callback) {
+  return this.on("receiveMessage", callback);
+}
+
+onTyping(callback) {
+  return this.on("typing", callback);
+}
+
+onMessageSent(callback) {
+  return this.on("messageSent", callback);
+}
+
+onMessagesRead(callback) {
+  return this.on("messagesRead", callback);
+}
+
+onUserJoinedRoom(callback) {
+  return this.on("userJoinedRoom", callback);
+}
+
+onOnlineStatus(callback) {
+  return this.on("onlineStatus", callback);
+}
   /* ================= CALL METHODS ================= */
   initiateCall(data) {
     console.log('📞 Initiating call to:', data.to);
@@ -297,11 +356,11 @@ console.log("🟢 userOnline emitted:", userId);
   on(event, callback) {
     if (!this.socket) {
       console.warn(`⚠️ Cannot add listener ${event}: socket not initialized`);
-      return () => {}; // Return empty cleanup function
+      return () => { }; // Return empty cleanup function
     }
-    
+
     this.socket.on(event, callback);
-    
+
     // Return cleanup function
     return () => {
       if (this.socket) {
@@ -371,7 +430,7 @@ console.log("🟢 userOnline emitted:", userId);
   /* ================= CONNECTION MANAGEMENT ================= */
   onConnect(callback) {
     this.connectionListeners.push(callback);
-    
+
     // Return cleanup function
     return () => {
       this.connectionListeners = this.connectionListeners.filter(cb => cb !== callback);
@@ -394,7 +453,7 @@ console.log("🟢 userOnline emitted:", userId);
 
   /* ================= CLEANUP ================= */
 
-    removeAllListeners() {
+  removeAllListeners() {
     if (!this.socket) return;
     console.log("🧹 Removing all socket listeners");
     this.socket.removeAllListeners();
@@ -403,32 +462,32 @@ console.log("🟢 userOnline emitted:", userId);
     if (this.socket) {
       // Remove all listeners
       this.socket.removeAllListeners();
-      
+
       // Disconnect if connected
       if (this.socket.connected) {
         this.socket.disconnect();
       }
-      
+
       this.socket = null;
     }
-    
+
     this.isConnected = false;
     this.isConnecting = false;
   }
 
   disconnect() {
     console.log("🧹 Disconnecting socket service");
-    
+
     // Clear all listeners
     this.removeAllErrorListeners();
     this.connectionListeners = [];
-    
+
     // Cleanup socket
     this.cleanupSocket();
-    
+
     // Clear queue
     this.eventQueue = [];
-    
+
     // Reset state
     this.userId = null;
     this.reconnectAttempts = 0;
@@ -441,11 +500,11 @@ console.log("🟢 userOnline emitted:", userId);
         resolve(false);
         return;
       }
-      
+
       const timeout = setTimeout(() => {
         resolve(false);
       }, 3000);
-      
+
       this.socket.emit('ping', Date.now(), (response) => {
         clearTimeout(timeout);
         resolve(true);
@@ -459,7 +518,7 @@ console.log("🟢 userOnline emitted:", userId);
       console.error("❌ Cannot reconnect: no user ID");
       return false;
     }
-    
+
     try {
       console.log("🔄 Attempting to reconnect...");
       await this.connect(this.userId);
