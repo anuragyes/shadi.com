@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -16,15 +15,13 @@ import {
 import { AuthContext } from '../Context/Authcontext.js';
 import toast from 'react-hot-toast';
 
-
-
 const FriendItem = ({ friend, closeList }) => {
     const navigate = useNavigate();
 
     const openProfile = () => {
-        closeList(); // close the list
+        closeList();
         navigate(`/userprofile/${friend.id}`);
-        window.location.reload(); // reload page
+        window.location.reload();
     };
 
     return (
@@ -47,11 +44,8 @@ const FriendItem = ({ friend, closeList }) => {
 };
 
 const User_individual = () => {
-
     const BASE_URL = "https://shadii-com.onrender.com";
     const { reqId } = useParams();
-
-    // console.log("thsi si suserid params-/***************************------------", reqId);
     const navigate = useNavigate();
     const { currentuser, isLoggedIn } = useContext(AuthContext);
 
@@ -59,6 +53,10 @@ const User_individual = () => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [visibility, setVisibility] = useState("public");
+    const [loadingVisibility, setLoadingVisibility] = useState(true);
+    const [isFriend, setIsFriend] = useState(false);
+    const [checkingFriendStatus, setCheckingFriendStatus] = useState(true);
 
     // Mutual Friends
     const [mutualFriends, setMutualFriends] = useState([]);
@@ -68,7 +66,6 @@ const User_individual = () => {
     const [friends, setFriends] = useState([]);
     const [loadingfriend, setLoadingfriend] = useState(true);
     const [showFriends, setShowFriends] = useState(false);
-
 
     // Connection States
     const [connectionStatus, setConnectionStatus] = useState("none");
@@ -86,9 +83,71 @@ const User_individual = () => {
 
 
 
+const checkFriendStatus = async () => {
+  if (!currentuser || !reqId) return false;
 
-    // fetcgh only the length of frends means hoeww many frends 
-    console.log("this is res-------------------------", reqId);
+  try {
+    setCheckingFriendStatus(true);
+    
+    const response = await axios.post(
+      `${BASE_URL}/api/user/request/indvidual/${reqId}`,
+      {
+        friendId: currentuser._id || currentuser.id
+      },
+      { withCredentials: true }
+    );
+    
+    if (response.data.success) {
+      setIsFriend(true);
+      return true;
+    } else {
+      setIsFriend(false);
+      return false;
+    }
+  } catch (err) {
+    console.error("Error checking friend status:", err.response?.data || err.message);
+    setIsFriend(false);
+    return false;
+  } finally {
+    setCheckingFriendStatus(false);
+  }
+};
+    // Fetch visibility status and check friend status
+    useEffect(() => {
+        const fetchVisibilityAndCheckFriend = async () => {
+            if (!reqId || !currentuser) return;
+            
+            try {
+                setLoadingVisibility(true);
+                setCheckingFriendStatus(true);
+                
+                // Fetch visibility status
+                const visibilityRes = await axios.get(
+                    `${BASE_URL}/api/visable/profile/getvisibility/${reqId}`,
+                    { withCredentials: true }
+                );
+                
+                if (visibilityRes.data.success) {
+                    setVisibility(visibilityRes.data.visibility || "public");
+                    
+                    // If profile is private, check if users are friends
+                    if (visibilityRes.data.visibility === "private") {
+                        await checkFriendStatus();
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching visibility:", err);
+                setVisibility("public");
+            } finally {
+                setLoadingVisibility(false);
+                setCheckingFriendStatus(false);
+            }
+        };
+
+        fetchVisibilityAndCheckFriend();
+    }, [reqId, currentuser]);
+
+    // Fetch friends count
     useEffect(() => {
         const fetchFriends = async () => {
             try {
@@ -97,19 +156,13 @@ const User_individual = () => {
                     withCredentials: true,
                 });
 
-
-
-
-
                 if (res.data.success) {
-                    // Handle both array and object responses
                     const friendsData = res.data.friends || [];
                     if (friendsData.length === 0) {
                         setFriends([]);
                         return;
                     }
                     const friendData = friendsData.map((friend) => {
-                        // Handle different response structures
                         const userData = friend.user || friend;
                         return {
                             id: userData._id || friend._id,
@@ -127,15 +180,12 @@ const User_individual = () => {
                             lastMessageTime: "",
                         };
                     });
-
-                    console.log("this is fronted data ", friendData);
                     setFriends(friendData);
                 } else {
-                    console.warn("API returned success: false", res.data);
                     setFriends([]);
                 }
             } catch (err) {
-                console.error("Error fetching friends:", err.response?.data || err.message);
+                console.error("Error fetching friends:", err);
                 setFriends([]);
             } finally {
                 setLoadingfriend(false);
@@ -147,8 +197,9 @@ const User_individual = () => {
         } else {
             setLoadingfriend(false);
         }
-    }, [isLoggedIn]);
+    }, [isLoggedIn, reqId]);
 
+    // Fetch mutual friends
     useEffect(() => {
         if (currentuser && reqId) {
             fetchMutualFriends();
@@ -343,6 +394,28 @@ const User_individual = () => {
         return iconMap[interest] || Sparkles;
     };
 
+    // Fetch mutual friends
+    const fetchMutualFriends = async () => {
+        if (!currentuser || !reqId) return;
+
+        try {
+            setMutualLoading(true);
+            const res = await axios.get(
+                `${BASE_URL}/api/mutual/mutual-friends/${currentuser?._id || currentuser?.id}/${reqId}`,
+                { withCredentials: true }
+            );
+
+            if (res.data?.success) {
+                setMutualFriends(res.data.mutualFriends || []);
+                setMutualCount(res.data.mutualCount || 0);
+            }
+        } catch (err) {
+            console.error("❌ Mutual friends error:", err);
+        } finally {
+            setMutualLoading(false);
+        }
+    };
+
     // Connection handlers
     const handleConnect = async () => {
         if (!reqId) {
@@ -370,32 +443,6 @@ const User_individual = () => {
             setActionLoading(false);
         }
     };
-
-
-    const fetchMutualFriends = async () => {
-        if (!currentuser || !reqId) return;
-
-        try {
-            setMutualLoading(true);
-
-            const res = await axios.get(
-                `${BASE_URL}/api/mutual/mutual-friends/${currentuser?._id || currentuser?.id}/${reqId}`,
-                { withCredentials: true }
-            );
-
-            // console.log("this is respose get from mutaul--------------------", res);
-
-            if (res.data?.success) {
-                setMutualFriends(res.data.mutualFriends || []);
-                setMutualCount(res.data.mutualCount || 0);
-            }
-        } catch (err) {
-            console.error("❌ Mutual friends error:", err);
-        } finally {
-            setMutualLoading(false);
-        }
-    };
-
 
     const handleCancelRequest = async () => {
         try {
@@ -472,75 +519,6 @@ const User_individual = () => {
         }
     };
 
-
-
-
-    //    start voice call from here
-
-    const startVoiceCall = async () => {
-        console.log("📞 Start voice call clicked");
-
-        // Validate - CRITICAL FIX
-        const currentUserId = currentuser?._id || currentuser?.id;
-        if (!currentUserId) {
-            console.error("❌ Current user ID not found");
-            alert("Please login again");
-            return;
-        }
-
-        // VALIDATE selectedFriendId - THIS WAS MISSING!
-        const friendId = reqId;
-        if (!friendId) {
-            console.error("❌ No friend selected");
-            // alert("Please select a friend to call");
-            return;
-        }
-
-        // Generate call ID - Now friendId won't be null
-        const callId = `call_${Date.now()}_${currentUserId}_${friendId}`;
-
-        console.log("📞 Preparing call:", {
-            from: currentUserId,
-            to: friendId,
-            callId
-        });
-
-        try {
-            // Connect socket if not connected
-            if (!socket.isConnected) {
-                console.log("🔌 Connecting socket...");
-                await socket.connect(currentUserId);
-                await new Promise(resolve => setTimeout(resolve, 300));
-            }
-
-            // Prepare navigation data
-            const navigationData = {
-                callType: 'outgoing',
-                remoteUserId: friendId,
-                remoteUserName: 'Friend'
-            };
-
-            // Store in session storage
-            sessionStorage.setItem('callData', JSON.stringify({
-                callId,
-                from: currentUserId,
-                to: friendId,
-                timestamp: Date.now()
-            }));
-
-            // Navigate first
-            console.log("🚀 Navigating to call interface");
-            navigate(`/VoiceCall/${callId}/${currentUserId}`, {
-                state: navigationData
-            });
-
-        } catch (error) {
-            console.error("❌ Error starting call:", error);
-            alert("Failed to start call. Please try again.");
-        }
-    };
-
-
     const handleSendMessage = async () => {
         if (!reqId) {
             toast.error("User ID is missing");
@@ -593,7 +571,7 @@ const User_individual = () => {
                     <button
                         onClick={handleConnect}
                         disabled={actionLoading}
-                        className="w-full  bg-green-600 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-50"
+                        className="w-full bg-green-600 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:shadow-lg transition-all disabled:opacity-50"
                     >
                         {actionLoading ? (
                             <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -655,8 +633,7 @@ const User_individual = () => {
             case "accepted":
                 return (
                     <div className="space-y-3">
-                        <button
-                            className="w-full bg-gradient-to-r from-green-400 to-emerald-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2">
+                        <button className="w-full bg-gradient-to-r from-green-400 to-emerald-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2">
                             <CheckCircle className="w-5 h-5" />
                             Connected
                         </button>
@@ -668,21 +645,14 @@ const User_individual = () => {
                             <MessageCircle className="w-5 h-5" />
                             Send Message
                         </button>
-
-
                         <div className="grid grid-cols-2 gap-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                            <button
-                                className="p-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
+                            <button className="p-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
                                 <Phone className="w-6 h-6 mx-auto text-red-600" />
                             </button>
                             <button className="p-3 bg-purple-50 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white text-purple-600 rounded-lg hover:bg-purple-100 transition-colors">
                                 <Video className="w-6 h-6 mx-auto text-red-600" />
                             </button>
-
                         </div>
-
-
-
                     </div>
                 );
 
@@ -700,13 +670,368 @@ const User_individual = () => {
         }
     };
 
-    // Loading State
-    if (loading) {
+    // Render content based on visibility and friend status
+    const renderProfileContent = () => {
+        // Show private profile content only if user is friend or it's their own profile
+        if (visibility === "private" && !user?.isCurrentUser && !isFriend) {
+            return (
+                <>
+                    {/* Private Profile Message */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-8 border-gray-100 mb-6">
+                        <div className="text-center py-8">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-purple-100 rounded-full flex items-center justify-center">
+                                <Users className="w-8 h-8 text-purple-600" />
+                            </div>
+                            <h3 className="text-xl font-semibold text-white mb-2">
+                                Profile is Private
+                            </h3>
+                            <p className="text-gray-300 mb-6">
+                                Connect with {user?.name || "this user"} to view their full profile details
+                            </p>
+                            
+                            {/* Connection button for private profiles */}
+                            <div className="max-w-xs mx-auto">
+                                {renderConnectionButtons()}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Show only basic info for private profiles */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Left Column - Limited Content */}
+                        <div className="lg:col-span-2 space-y-6">
+                            {/* Basic Info Card */}
+                            <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <div className="flex-1">
+                                        <h2 className="text-2xl font-bold text-white">{user?.name || "User"}</h2>
+                                        <div className="flex items-center gap-4 mt-2 text-gray-300">
+                                            {user?.age && (
+                                                <div className="flex items-center gap-2">
+                                                    <Cake className="w-4 h-4 text-purple-400" />
+                                                    <span>{user.age} years</span>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-2">
+                                                <Users className="w-4 h-4 text-purple-400" />
+                                                <span className="capitalize">{user?.gender || "Not specified"}</span>
+                                            </div>
+                                            {user?.location && (
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="w-4 h-4 text-purple-400" />
+                                                    <span>{user.location}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Column - Profile Image */}
+                        <div className="space-y-6">
+                            <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                                <div className="text-center">
+                                    <img
+                                        src={user?.photos?.[0] || getDefaultPhoto(user?.gender)}
+                                        alt={user?.name}
+                                        className="w-48 h-48 rounded-full object-cover border-4 border-white shadow-lg mx-auto"
+                                    />
+                                    <p className="mt-4 text-sm text-gray-300">
+                                        Connect to view more details
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        // Public profile or private profile but user is friend - show everything
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-pink-50">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column - Full Content */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Profile Header Card */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-8 border-gray-100">
+                        <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-4 mb-4">
+                                    <h1 className="text-3xl font-bold text-white">{user.name}</h1>
+                                    {visibility === "private" && isFriend && (
+                                        <span className="bg-purple-500 text-white text-xs px-3 py-1 rounded-full flex items-center gap-1">
+                                            <Users className="w-3 h-3" />
+                                            Friend
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-6 text-gray-300 mb-6">
+                                    {mutualCount > 0 && (
+                                        <div
+                                            onClick={() => setShowMutualModal(true)}
+                                            className="flex items-center gap-2 cursor-pointer mt-2"
+                                        >
+                                            <div className="flex -space-x-2">
+                                                {mutualFriends.slice(0, 3).map((mf, index) => (
+                                                    <img
+                                                        key={mf._id}
+                                                        src={mf.photo || getDefaultPhoto(mf.gender)}
+                                                        alt={mf.firstName}
+                                                        className="w-7 h-7 rounded-full border-2 border-white object-cover"
+                                                        style={{ zIndex: 10 - index }}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <span className="text-sm text-white">
+                                                {mutualCount} mutual friends
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    <div className="flex items-center gap-2">
+                                        <MapPin className="w-4 h-4 text-purple-400" />
+                                        <span>{user.location}, {user.country}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Cake className="w-4 h-4 text-purple-400" />
+                                        <span>{user.age} years</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-purple-400" />
+                                        <span className="capitalize">{user.gender}</span>
+                                    </div>
+
+                                    <div
+                                        onClick={() => setShowFriends(true)}
+                                        className="cursor-pointer flex items-center gap-2"
+                                    >
+                                        <span className="text-white">
+                                            Friends ({friends.length})
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Quick Stats */}
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                        <div className="text-2xl font-bold text-white">{user.compatibility}%</div>
+                                        <div className="text-sm text-gray-300">Match</div>
+                                    </div>
+                                    <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                        <div className="text-2xl font-bold text-white">{user.interests.length}</div>
+                                        <div className="text-sm text-gray-300">Interests</div>
+                                    </div>
+                                    <div className="text-center p-4 rounded-xl bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                        <div className="text-2xl font-bold text-white">4.8</div>
+                                        <div className="text-sm text-gray-300">Rating</div>
+                                    </div>
+                                </div>
+
+                                {/* Bio */}
+                                <p className="text-gray-300 leading-relaxed mb-6">{user.bio}</p>
+
+                                {/* Looking For */}
+                                <div className="bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-xl p-4 border-purple-700">
+                                    <h3 className="font-semibold text-white mb-2 flex items-center gap-2">
+                                        <Target className="w-4 h-4 text-white" />
+                                        <span className="text-white">Looking For</span>
+                                    </h3>
+                                    <p className="text-gray-300 text-sm">{user.about.lookingFor}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Personal Details */}
+                    <div className="rounded-2xl shadow-sm p-6 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white border-gray-100">
+                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                            <Smile className="w-6 h-6 text-white" />
+                            <span className="text-white">Personal Details</span>
+                        </h2>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Relationship Status</div>
+                                <div className="font-semibold text-white">{user.personalInfo.relationship}</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Height</div>
+                                <div className="font-semibold text-white">{user.personalInfo.height}</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Religion</div>
+                                <div className="font-semibold text-white">{user.personalInfo.religion}</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Languages</div>
+                                <div className="font-semibold text-white">{user.personalInfo.languages.join(", ")}</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Children</div>
+                                <div className="font-semibold text-white">{user.personalInfo.children}</div>
+                            </div>
+                            <div className="p-3 rounded-lg bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white">
+                                <div className="text-sm text-gray-300">Manglik</div>
+                                <div className="font-semibold text-white">{user.personalInfo.manglik}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Professional Info */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                            <Briefcase className="w-6 h-6 text-white" />
+                            <span className="text-white">Professional Information</span>
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-lg">
+                                    <span className="text-gray-300">Occupation</span>
+                                    <span className="font-semibold text-white">{user.occupation}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-lg">
+                                    <span className="text-gray-300">Education</span>
+                                    <span className="font-semibold text-white">{user.education}</span>
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-lg">
+                                    <span className="text-gray-300">Company</span>
+                                    <span className="font-semibold text-white">{user.company}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-lg">
+                                    <span className="text-gray-300">Annual Income</span>
+                                    <span className="font-semibold text-white">{user.professionalInfo.annualIncome}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Interests */}
+                    {user.interests.length > 0 && (
+                        <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                                <Sparkles className="w-6 h-6 text-pink-400" />
+                                Interests & Hobbies
+                            </h2>
+                            <div className="flex flex-wrap gap-3">
+                                {user.interests.map((interest, index) => {
+                                    const Icon = getInterestIcon(interest);
+                                    return (
+                                        <div
+                                            key={index}
+                                            className="flex items-center gap-2 bg-gradient-to-r from-purple-900 to-pink-900 text-white px-4 py-2 rounded-lg font-medium border border-purple-700"
+                                        >
+                                            <Icon className="w-4 h-4" />
+                                            <span>{interest}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Lifestyle */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                        <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-3">
+                            <Leaf className="w-6 h-6 text-green-400" />
+                            <span className="text-white">Life Style</span>
+                        </h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(user.lifestyle).map(([key, value]) => (
+                                <div key={key} className="text-center p-4 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 text-white rounded-xl">
+                                    <div className="font-semibold text-white capitalize text-sm mb-1">
+                                        {key}
+                                    </div>
+                                    <div className="text-gray-300 font-medium">{value}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right Column - Profile Image & Actions */}
+                <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                        <div className="text-center">
+                            <div className="relative inline-block mb-4">
+                                <img
+                                    src={user.photos[0]}
+                                    alt={user.name}
+                                    className="w-48 h-48 rounded-full object-cover border-4 border-white shadow-lg mx-auto"
+                                    onError={(e) => {
+                                        e.target.src = getDefaultPhoto(user.gender);
+                                    }}
+                                />
+                                {visibility === "private" && isFriend && (
+                                    <div className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs px-2 py-1 rounded-full">
+                                        Friend
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Star Rating */}
+                            <div className="flex justify-center gap-1 mb-4">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                    <Star
+                                        key={star}
+                                        className={`w-5 h-5 ${star <= 4
+                                            ? 'text-yellow-400 fill-current'
+                                            : 'text-gray-300'
+                                            }`}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Connection Status */}
+                            <div className="mb-6">
+                                {renderConnectionButtons()}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Family Info */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                        <h3 className="text-lg font-bold text-white mb-4">Family Background</h3>
+                        <div className="space-y-3">
+                            {Object.entries(user.familyInfo).map(([key, value]) => (
+                                <div key={key} className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300 capitalize">
+                                        {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    </span>
+                                    <span className="font-medium text-white">{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Partner Preferences */}
+                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6 border-gray-100">
+                        <h3 className="text-lg font-bold text-white mb-4">Partner Preferences</h3>
+                        <div className="space-y-3">
+                            {Object.entries(user.partnerPreferences).map(([key, value]) => (
+                                <div key={key} className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-300 capitalize">
+                                        {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    </span>
+                                    <span className="font-medium text-white">{value}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    // Loading State
+    if (loading || loadingVisibility || checkingFriendStatus) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading profile...</p>
+                    <p className="text-white">Loading profile...</p>
                 </div>
             </div>
         );
@@ -715,11 +1040,11 @@ const User_individual = () => {
     // Error State
     if (error || !user) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-pink-50">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+                <div className="text-center p-8 bg-gradient-to-br from-slate-800 via-purple-800 to-slate-800 rounded-2xl shadow-lg max-w-md">
                     <X className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                    <h2 className="text-2xl font-bold text-gray-800 mb-2">Profile Not Found</h2>
-                    <p className="text-gray-600 mb-6">{error || "User profile could not be loaded"}</p>
+                    <h2 className="text-2xl font-bold text-white mb-2">Profile Not Found</h2>
+                    <p className="text-gray-300 mb-6">{error || "User profile could not be loaded"}</p>
                     <button
                         onClick={() => navigate('/discover')}
                         className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-full font-semibold hover:shadow-lg transition-all"
@@ -732,413 +1057,110 @@ const User_individual = () => {
     }
 
     return (
-        <div className="min-h-screen  bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white py-8">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white py-8">
             <div className="max-w-6xl mx-auto px-4">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <button
                         onClick={() => navigate('/discover')}
-                        className="flex items-center gap-2 text-white hover:text-white-800 transition-colors"
+                        className="flex items-center gap-2 text-white hover:text-gray-300 transition-colors"
                     >
                         <ArrowLeft className="w-5 h-5" />
                         <span>Back</span>
                     </button>
-                   
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Left Column - Content */}
-                    <div className="lg:col-span-2 space-y-6">
-                        {/* Profile Header Card */}
-                        <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-8  border-gray-100">
-                            <div className="flex items-start justify-between">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-4 mb-4">
-                                        <h1 className="text-3xl font-bold text-white-800">{user.name}</h1>
-                                        {/* {user.isOnline && (
-                                            <div className="flex items-center gap-1 bg-green-50 px-3 py-1 rounded-full">
-                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                <span className="text-green-900 text-sm font-medium">Online</span>
-                                            </div>
-                                        )} */}
+                {/* Render content based on visibility and friend status */}
+                {renderProfileContent()}
+
+                {/* Mutual Friends Modal */}
+                {showMutualModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                        <div className="w-[420px] max-h-[75vh] bg-gradient-to-br from-slate-600 via-purple-600 to-slate-900 text-white rounded-2xl shadow-2xl flex flex-col">
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-5 py-4">
+                                <h3 className="text-lg font-semibold text-white">
+                                    Mutual Friends
+                                    <span className="ml-2 text-sm text-gray-300">
+                                        ({mutualCount})
+                                    </span>
+                                </h3>
+
+                                <button
+                                    onClick={() => setShowMutualModal(false)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-700 text-gray-300 hover:text-white transition"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
+                                {mutualLoading ? (
+                                    <div className="py-10 text-center text-gray-300 text-sm">
+                                        Loading mutual friends...
                                     </div>
-
-                                    <div className="flex items-center  gap-6 text-white-600 mb-6">
-                                        {mutualCount > 0 && (
-                                            <div
-                                                onClick={() => setShowMutualModal(true)}
-                                                className="flex items-center gap-2 cursor-pointer mt-2"
-                                            >
-                                                {/* Images */}
-                                                <div className="flex -space-x-2 ">
-                                                    {mutualFriends.slice(0, 3).map((mf, index) => (
-                                                        <img
-                                                            key={mf._id}
-                                                            src={mf.photo || getDefaultPhoto(mf.gender)}
-                                                            alt={mf.firstName}
-                                                            className="w-7 h-7 rounded-full  border-white object-cover"
-                                                            style={{ zIndex: 10 - index }}
-                                                        />
-                                                    ))}
-                                                </div>
-
-                                                {/* Count */}
-                                                <span className="text-sm text-white">
-                                                    {mutualCount} mutual friends
-                                                </span>
-                                            </div>
-                                        )}
-
-
-
-
-
-                                        {showMutualModal && (
-                                            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50  backdrop-blur-sm">
-
-                                                <div className="w-[420px] max-h-[75vh] bg-gradient-to-br from-slate-600 via-purple-600 to-slate-900 text-white rounded-2xl shadow-2xl flex flex-col">
-                                                    {/* Header */}
-                                                    <div className="flex items-center justify-between px-5 py-4 ">
-                                                        <h3 className="text-lg font-semibold text-white-800">
-                                                            Mutual Friends
-                                                            <span className="ml-2 text-sm text-white-500">
-                                                                ({mutualCount})
-                                                            </span>
-                                                        </h3>
-
-                                                        <button
-                                                            onClick={() => setShowMutualModal(false)}
-                                                            className="w-8 h-8 flex items-center justify-center rounded-full 
-                     hover:bg-gray-100 text-white-500 hover:text-gray-700 transition"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Content */}
-                                                    <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1">
-
-                                                        {mutualLoading ? (
-                                                            <div className="py-10 text-center text-gray-500 text-sm">
-                                                                Loading mutual friends...
-                                                            </div>
-                                                        ) : mutualFriends.length === 0 ? (
-                                                            <div className="py-10 text-center text-gray-500 text-sm">
-                                                                No mutual friends found
-                                                            </div>
-                                                        ) : (
-                                                            mutualFriends.map((friend) => (
-                                                                <div
-                                                                    key={friend._id}
-                                                                    className="flex items-center gap-3 p-2 rounded-xl
-                         hover:bg-gray-100 cursor-pointer transition"
-                                                                >
-                                                                    <img
-                                                                        src={friend.photo || getDefaultPhoto(friend.gender)}
-                                                                        alt={friend.firstName}
-                                                                        className="w-11 h-11 rounded-full object-cover border"
-                                                                    />
-
-                                                                    <div>
-                                                                        <p className="text-sm font-medium text-gray-900">
-                                                                            {friend.firstName} {friend.lastName}
-                                                                        </p>
-                                                                        <p className="text-xs text-gray-900">
-                                                                            View profile
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            ))
-                                                        )}
-
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-
-
-
-
-
-                                        {showFriends && (
-                                            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-
-                                                <div className="bg-gray-900 w-[400px] rounded-xl p-4">
-
-
-
-
-
-
-                                                    {/* Header */}
-                                                    <div className="flex justify-between items-center mb-4">
-                                                        <h2 className="text-white text-lg font-semibold">
-                                                            Friends ({friends.length})
-                                                        </h2>
-                                                        <button
-                                                            onClick={() => setShowFriends(false)}
-                                                            className="text-gray-400 hover:text-white"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Friends List */}
-                                                    <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                                                        {friends.map((friend) => (
-                                                            <FriendItem key={friend.id} friend={friend} closeList={() => setShowFriends(false)} />
-                                                        ))}
-                                                    </div>
-
-                                                </div>
-                                            </div>
-                                        )}
-
-
-
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="w-4 h-4 text-purple-500" />
-                                            <span>{user.location}, {user.country}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Cake className="w-4 h-4 text-purple-500" />
-                                            <span>{user.age} years</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Users className="w-4 h-4 text-purple-500" />
-                                            <span className="capitalize">{user.gender}</span>
-                                        </div>
-
+                                ) : mutualFriends.length === 0 ? (
+                                    <div className="py-10 text-center text-gray-300 text-sm">
+                                        No mutual friends found
+                                    </div>
+                                ) : (
+                                    mutualFriends.map((friend) => (
                                         <div
-                                            onClick={() => setShowFriends(true)}
-                                            className="cursor-pointer flex items-center gap-2"
+                                            key={friend._id}
+                                            className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-800 cursor-pointer transition"
                                         >
-                                            <span className="text-white">
-                                                { }   Friends ({friends.length})
-                                            </span>
-                                        </div>
+                                            <img
+                                                src={friend.photo || getDefaultPhoto(friend.gender)}
+                                                alt={friend.firstName}
+                                                className="w-11 h-11 rounded-full object-cover border border-gray-700"
+                                            />
 
-                                    </div>
-
-                                    {/* Quick Stats */}
-                                    <div className="grid grid-cols-3 gap-4   mb-6">
-                                        <div className="text-center p-4  rounded-xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                            <div className="text-2xl font-bold text-white-600">{user.compatibility}%</div>
-                                            <div className="text-sm text-white-500">Match</div>
-                                        </div>
-                                        <div className="text-center p-4 bg-purple-50 rounded-xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                            <div className="text-2xl font-bold text-white-600">{user.interests.length}</div>
-                                            <div className="text-sm text-white-500">Interests</div>
-                                        </div>
-                                        <div className="text-center p-4 bg-pink-50 rounded-xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                            <div className="text-2xl font-bold text-white">4.8</div>
-                                            <div className="text-sm text-white">Rating</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Bio */}
-                                    <p className="text-white-700 leading-relaxed mb-6">{user.bio}</p>
-
-                                    {/* Looking For */}
-                                    <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl p-4 border-blue-100">
-                                        <h3 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                                            <Target className="w-4 h-4 text-white" />
-                                            <span className="text-white">Looking For</span>
-                                        </h3>
-                                        <p className="text-white text-sm">{user.about.lookingFor}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Personal Details */}
-                        <div className=" rounded-2xl shadow-sm p-6 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white border-gray-100">
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                                <Smile className="w-6 h-6 text-white" />
-                                <span className="text-white">Personal Details</span>
-                            </h2>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 ">
-                                <div className="p-3 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white-500">Relationship Status</div>
-                                    <div className="font-semibold text-white">{user.personalInfo.relationship}</div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white">Height</div>
-                                    <div className="font-semibold text-white">{user.personalInfo.height}</div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white">Religion</div>
-                                    <div className="font-semibold text-white">{user.personalInfo.religion}</div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white-500">Languages</div>
-                                    <div className="font-semibold text-white-800">{user.personalInfo.languages.join(", ")}</div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white">Children</div>
-                                    <div className="font-semibold text-white-800">{user.personalInfo.children}</div>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-lg bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-                                    <div className="text-sm text-white">Manglik</div>
-                                    <div className="font-semibold text-white">{user.personalInfo.manglik}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Professional Info */}
-                        <div className="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-2xl shadow-sm p-6  border-gray-100">
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                                <Briefcase className="w-6 h-6 text-white" />
-                                <span className="text-white">Professional Information</span>
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 ">
-                                <div className="space-y-4 ">
-                                    <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-lg">
-                                        <span className="text-white-600">Occupation</span>
-                                        <span className="font-semibold text-white-700">{user.occupation}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-lg">
-                                        <span className="text-white">Education</span>
-                                        <span className="font-semibold text-white-700">{user.education}</span>
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center p-3 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-lg">
-                                        <span className="text-white">Company</span>
-                                        <span className="font-semibold text-white">{user.company}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-3 bg-blue-50 rounded-lg">
-                                        <span className="text-white">Annual Income</span>
-                                        <span className="font-semibold text-white-700">{user.professionalInfo.annualIncome}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Interests */}
-                        {user.interests.length > 0 && (
-                            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
-                                <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                                    <Sparkles className="w-6 h-6 text-pink-500" />
-                                    Interests & Hobbies
-                                </h2>
-                                <div className="flex flex-wrap gap-3">
-                                    {user.interests.map((interest, index) => {
-                                        const Icon = getInterestIcon(interest);
-                                        return (
-                                            <div
-                                                key={index}
-                                                className="flex items-center gap-2 bg-gradient-to-r from-pink-50 to-purple-50 text-purple-700 px-4 py-2 rounded-lg font-medium border border-purple-100"
-                                            >
-                                                <Icon className="w-4 h-4" />
-                                                <span>{interest}</span>
+                                            <div>
+                                                <p className="text-sm font-medium text-white">
+                                                    {friend.firstName} {friend.lastName}
+                                                </p>
+                                                <p className="text-xs text-gray-400">
+                                                    View profile
+                                                </p>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Lifestyle */}
-                        <div className="bg-white rounded-2xl shadow-sm p-6  bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white border-gray-100">
-                            <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                                <Leaf className="w-6 h-6 text-green-500" />
-                                <span className="text-white">Life Style</span>
-                            </h2>
-                            <div className="grid grid-cols-2 md:grid-cols-4  gap-4">
-                                {Object.entries(user.lifestyle).map(([key, value]) => (
-                                    <div key={key} className="text-center p-4 bg-white bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white rounded-xl">
-                                        <div className="font-semibold text-white-700 capitalize text-sm mb-1">
-                                            {key}
                                         </div>
-                                        <div className="text-white-600 font-medium">{value}</div>
-                                    </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Friends Modal */}
+                {showFriends && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+                        <div className="bg-gray-900 w-[400px] rounded-xl p-4">
+                            {/* Header */}
+                            <div className="flex justify-between items-center mb-4">
+                                <h2 className="text-white text-lg font-semibold">
+                                    Friends ({friends.length})
+                                </h2>
+                                <button
+                                    onClick={() => setShowFriends(false)}
+                                    className="text-gray-400 hover:text-white"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            {/* Friends List */}
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                                {friends.map((friend) => (
+                                    <FriendItem key={friend.id} friend={friend} closeList={() => setShowFriends(false)} />
                                 ))}
                             </div>
                         </div>
                     </div>
-
-                    {/* Right Column - Profile Image & Actions */}
-                    <div className="space-y-6">
-                        {/* Profile Image */}
-                        <div className="bg-white rounded-2xl shadow-sm p-6 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white border-gray-100">
-                            <div className="text-center">
-                                <div className="relative inline-block mb-4">
-                                    <img
-                                        src={user.photos[0]}
-                                        alt={user.name}
-                                        className="w-48 h-48 rounded-full object-cover border-4 border-white shadow-lg mx-auto"
-                                        onError={(e) => {
-                                            e.target.src = getDefaultPhoto(user.gender);
-                                        }}
-                                    />
-                                    {user.isOnline && (
-                                        <div className="absolute bottom-4 right-4 w-6 h-6 bg-green-500 border-2 border-white rounded-full"></div>
-                                    )}
-                                </div>
-
-                                {/* Star Rating */}
-                                <div className="flex justify-center gap-1 mb-4">
-                                    {[1, 2, 3, 4, 5].map((star) => (
-                                        <Star
-                                            key={star}
-                                            className={`w-5 h-5 ${star <= 4
-                                                ? 'text-yellow-400 fill-current'
-                                                : 'text-gray-300'
-                                                }`}
-                                        />
-                                    ))}
-                                </div>
-
-                                {/* Connection Status */}
-                                <div className="mb-6">
-                                    {renderConnectionButtons()}
-                                </div>
-
-                                {/* Quick Actions */}
-
-                            </div>
-                        </div>
-
-                        {/* Family Info */}
-                        <div className="bg-white rounded-2xl shadow-sm p-6 bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white border-gray-100">
-                            <h3 className="text-lg font-bold text-white-800 mb-4">Family Background</h3>
-                            <div className="space-y-3">
-                                {Object.entries(user.familyInfo).map(([key, value]) => (
-                                    <div key={key} className="flex justify-between items-center text-sm">
-                                        <span className="text-white-600 capitalize">
-                                            {key.replace(/([A-Z])/g, ' $1').trim()}:
-                                        </span>
-                                        <span className="font-medium text-white-800">{value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Partner Preferences */}
-                        <div className="bg-white rounded-2xl bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white shadow-sm p-6  border-gray-100">
-                            <h3 className="text-lg font-bold text-white-800 mb-4">Partner Preferences</h3>
-                            <div className="space-y-3">
-                                {Object.entries(user.partnerPreferences).map(([key, value]) => (
-                                    <div key={key} className="flex justify-between items-center text-sm">
-                                        <span className="text-white-600 capitalize">
-                                            {key.replace(/([A-Z])/g, ' $1').trim()}:
-                                        </span>
-                                        <span className="font-medium text-white-800">{value}</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                )}
             </div>
         </div>
-
-
     );
-
-
 };
 
 export default User_individual;
