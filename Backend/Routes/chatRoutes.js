@@ -6,6 +6,7 @@ import {
   cancelChatRequestByUser, 
   getConnectionStatus, 
   getFriends, 
+  getIndividualFriend,
   getFriendsWithConversations, 
   getFriendsWithNoConversation, 
   getIncomingRequests, 
@@ -16,7 +17,7 @@ import { getChatMessages, getOrCreateChat, sendMessage } from "../Controllers/Fr
 
 const ChatRoutes = express.Router();
 
-// 🟢 CHAT REQUEST SYSTEM
+//  CHAT REQUEST SYSTEM
 ChatRoutes.post("/chat-request/send", isAuth, sendChatRequest);
 ChatRoutes.get("/status", isAuth, getConnectionStatus);
 
@@ -30,14 +31,14 @@ ChatRoutes.put("/cancel-request", isAuth, cancelChatRequest); // Changed paramet
 ChatRoutes.get('/requests/outgoing', isAuth, getOutgoingRequests); // New route
 
 
-// 🟢 FRIENDS SYSTEM
+//  FRIENDS SYSTEM
 ChatRoutes.get("/friends/:id", isAuth, getFriends);
 ChatRoutes.get("/friends/with-conversations/:id", isAuth, getFriendsWithConversations);
 ChatRoutes.get("/friends/no-conversations/:id", isAuth, getFriendsWithNoConversation);
 
+ChatRoutes.post("/indvidual/:userId" , getIndividualFriend);
 
-
-// 🟢 MESSAGING SYSTEM
+//  MESSAGING SYSTEM
 ChatRoutes.get("/chat/:userId", isAuth, getOrCreateChat);
 ChatRoutes.post("/chat/:id/message", isAuth, sendMessage);
 ChatRoutes.get("/chat/:id/messages", isAuth, getChatMessages);
