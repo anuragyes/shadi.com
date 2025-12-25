@@ -673,3 +673,65 @@ export const getFriendsWithNoConversation = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+
+
+
+
+export const getIndividualFriend = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { friendId } = req.body;
+
+    console.log("This is userId:", userId);
+    console.log("This is friendId:", friendId);
+
+    if (!userId || !friendId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID or Friend ID missing",
+      });
+    }
+
+    const request = await ChatRequest.findOne({
+      status: "accepted",
+      $or: [
+        { sender: userId, receiver: friendId },
+        { sender: friendId, receiver: userId },
+      ],
+    })
+      .populate(
+        "sender",
+        "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt"
+      )
+      .populate(
+        "receiver",
+        "personalInfo.firstName personalInfo.lastName email location gallery isActive lastActive createdAt"
+      );
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Friend not found or not connected",
+      });
+    }
+
+    const friend =
+      request.sender._id.toString() === userId
+        ? request.receiver
+        : request.sender;
+
+    res.status(200).json({
+      success: true,
+      message: "Friend found",
+      data: friend,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching friend:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch friend",
+    });
+  }
+};
+
